@@ -1,0 +1,11 @@
+{
+  "entries": [
+    {
+      "title": "Test",
+      "content": "Test content"
+    }
+  ],
+  "personality": "Be helpful",
+  "language": "en",
+  "position": "right"
+}

@@ -1,0 +1,7 @@
+cahit-theme-latest.tar.gz filter=lfs diff=lfs merge=lfs -text
+cahit-theme-latest.zip filter=lfs diff=lfs merge=lfs -text
+cahit-theme.tar.gz filter=lfs diff=lfs merge=lfs -text
+cahit-website.tar.gz filter=lfs diff=lfs merge=lfs -text
+*.zip !text !filter !merge !diff
+*.tar.gz !text !filter !merge !diff
+*.gz !text !filter !merge !diff

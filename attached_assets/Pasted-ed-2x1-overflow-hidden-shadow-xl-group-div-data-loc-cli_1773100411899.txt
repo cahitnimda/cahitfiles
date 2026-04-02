@@ -1,0 +1,43 @@
+ed-2x1 overflow-hidden shadow-xl group">
+<div data-loc="client/src/pages/Home.tsx:402" class="absolute inset-0 transiti
+on-opacity duration-1000 opacity-0"> == $0 p
+<img data-loc="client/src/pages/Home.tsx:408" alt="Road construction with he
+avy rollers" class="w-full h-full object-cover " src="https://files.manuscd
+n.com/user_upload_by_module/session_file/310419663029149863/gvWLawWCNocSINu
+R.jpeg">
+</div>
+v <div data-loc="client/src/pages/Home.tsx:402" class="absolute inset-0 transiti
+on-opacity duration-1000 opacity-0">
+<img data-loc="client/src/pages/Home.tsx:408" alt="Asphalt paving with Vogel
+e machine" class="w-full h-full object-cover " src="https://files.manuscdn.c
+om/user_upload_by_module/session_file/310419663029149863/GjfldJYeoGyqGIMR.jp
+eg">
+</div>
+<div data-loc="client/src/pages/Home.tsx:402" class="absolute inset-0 transiti
+on-opacity duration-1000 opacity-0">
+<img data-loc="client/src/pages/Home.tsx:408" alt="Road paving in desert lan
+dscape" class="w-full h-full object-cover " src="https://files.manuscdn.com/
+user_upload_by_module/session_file/310419663029149863/GORAtqFGJ1EPryhc.jpe
+g">
+</div>
+v <div data-loc="client/src/pages/Home.tsx:402" class="absolute inset-0 transiti
+on-opacity duration-1000 opacity-0">
+<img data-loc="client/src/pages/Home.tsx:408" alt="Road line marking operati
+ons" class="w-full h-full object-cover " src="https://files.manuscdn.com/use
+r_upload_by_module/session_file/310419663029149863/mejIiORMfOESXWxO.jpeg">
+</div>
+v <div data-loc="client/src/pages/Home.tsx:402" class="absolute inset-0 transiti
+on-opacity duration-1000 opacity-0">
+<img data-loc="client/src/pages/Home.tsx:408" alt="Road construction aerial
+perspective" class="w-full h-full object-cover " src="https://files.manuscd
+n.com/user_upload_by_module/session_file/310419663029149863/pdSXKYWQJmOr1gE
+f.png">
+</div>
+v <div data-loc="client/src/pages/Home.tsx:402" class="absolute inset-0 transiti
+on-opacity duration-1000 opacity-0">
+<img data-loc="client/src/pages/Home.tsx:408" alt="Underground pipe installa
+tion" class="w-full h-full object-cover " src="https://files.manuscdn.com/us
+er_upload_by_module/session_file/310419663029149863/jdGZtMFCClzefYrV.png">
+</div>
+<div data-loc="client/src/pages/Home.tsx:402" class="absolute inset-0 transiti
+on-opacity duration-1000 opacity-0">

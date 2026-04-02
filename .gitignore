@@ -1,0 +1,11 @@
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+*.zip
+cahit-theme-latest.zip
+cahit-theme-latest.tar.gz
+cahit-theme.tar.gz
+cahit-website.tar.gz

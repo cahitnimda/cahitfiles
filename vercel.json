@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "preview-server.cjs",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "wp-theme/cahit-theme/assets/**",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "wp-theme/cahit-theme/admin/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    { "src": "/assets/(.*)", "dest": "/wp-theme/cahit-theme/assets/$1" },
+    { "src": "/admin/admin.css", "dest": "/wp-theme/cahit-theme/admin/admin.css" },
+    { "src": "/admin/admin.js", "dest": "/wp-theme/cahit-theme/admin/admin.js" },
+    { "src": "/(.*)", "dest": "/preview-server.cjs" }
+  ]
+}

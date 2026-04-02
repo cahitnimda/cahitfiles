@@ -1,0 +1,20 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "pm21MxgwaSnWDzPjb9iLS"
+uri = "file://cahit-theme.tar.gz"
+type = "unspecified"
+title = "Cahit WordPress Theme (complete)"
+
+[[outputs]]
+id = "n-bMOMaAQzT5O4eEHeq5u"
+uri = "file://cahit-website.tar.gz"
+type = "unspecified"
+title = "Cahit Website - Fully Updated (Chatbot Knowledge, API Settings, Vercel Config)"
+
+[[outputs]]
+id = "jctiCtCs8cKAKJgEhsU5j"
+uri = "file://cahit-theme-latest.zip"
+type = "unspecified"
+title = "Cahit Theme - Latest Updated Files"

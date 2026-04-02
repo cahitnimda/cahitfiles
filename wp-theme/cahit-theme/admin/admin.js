@@ -289,6 +289,40 @@
       { key: 'footer-logo', label: 'Footer Logo', selector: '.footer-logo', type: 'image', attr: 'src', defaultVal: '' },
       { key: 'footer-desc', label: 'Company Description', selector: '.footer-desc', type: 'textarea', defaultVal: '' },
       { key: 'footer-tagline', label: 'Tagline', selector: '.footer-tagline', type: 'text', defaultVal: 'A Solid Ground For Your Project' }
+    ],
+    'blog-hero': [
+      { key: 'blog-hero-title', label: 'Blog Page Title', selector: '.hero-banner-title', type: 'text', defaultVal: 'Blog' },
+      { key: 'blog-hero-subtitle', label: 'Blog Subtitle', selector: '.hero-banner-subtitle', type: 'textarea', defaultVal: 'Insights, news, and updates from the Cahit Trading & Contracting team.' },
+      { key: 'blog-hero-bg', label: 'Hero Background Image', selector: '.hero-banner-bg', type: 'image', attr: 'src', defaultVal: '' }
+    ],
+    'blog-posts': [
+      { key: 'blog-section-title', label: 'Section Title', selector: '.section-title', type: 'text', defaultVal: 'Latest Posts' },
+      { key: 'blog-section-subtitle', label: 'Section Subtitle', selector: '.section-subtitle', type: 'textarea', defaultVal: 'Stay up to date with our latest projects, industry insights, and company news.' }
+    ],
+    'about-hero': [
+      { key: 'about-hero-title', label: 'About Page Title', selector: '.hero-banner-title', type: 'text', defaultVal: 'About Us' },
+      { key: 'about-hero-subtitle', label: 'About Subtitle', selector: '.hero-banner-subtitle', type: 'textarea', defaultVal: '' },
+      { key: 'about-hero-bg', label: 'Hero Background Image', selector: '.hero-banner-bg', type: 'image', attr: 'src', defaultVal: '' }
+    ],
+    'services-hero': [
+      { key: 'services-hero-title', label: 'Services Page Title', selector: '.hero-banner-title', type: 'text', defaultVal: 'Our Services' },
+      { key: 'services-hero-subtitle', label: 'Services Subtitle', selector: '.hero-banner-subtitle', type: 'textarea', defaultVal: '' },
+      { key: 'services-hero-bg', label: 'Hero Background Image', selector: '.hero-banner-bg', type: 'image', attr: 'src', defaultVal: '' }
+    ],
+    'projects-hero': [
+      { key: 'projects-hero-title', label: 'Projects Page Title', selector: '.hero-banner-title', type: 'text', defaultVal: 'Our Projects' },
+      { key: 'projects-hero-subtitle', label: 'Projects Subtitle', selector: '.hero-banner-subtitle', type: 'textarea', defaultVal: '' },
+      { key: 'projects-hero-bg', label: 'Hero Background Image', selector: '.hero-banner-bg', type: 'image', attr: 'src', defaultVal: '' }
+    ],
+    'careers-hero': [
+      { key: 'careers-hero-title', label: 'Careers Page Title', selector: '.hero-banner-title', type: 'text', defaultVal: 'Careers' },
+      { key: 'careers-hero-subtitle', label: 'Careers Subtitle', selector: '.hero-banner-subtitle', type: 'textarea', defaultVal: '' },
+      { key: 'careers-hero-bg', label: 'Hero Background Image', selector: '.hero-banner-bg', type: 'image', attr: 'src', defaultVal: '' }
+    ],
+    'clients-hero': [
+      { key: 'clients-hero-title', label: 'Clients Page Title', selector: '.hero-banner-title', type: 'text', defaultVal: 'Our Clients' },
+      { key: 'clients-hero-subtitle', label: 'Clients Subtitle', selector: '.hero-banner-subtitle', type: 'textarea', defaultVal: '' },
+      { key: 'clients-hero-bg', label: 'Hero Background Image', selector: '.hero-banner-bg', type: 'image', attr: 'src', defaultVal: '' }
     ]
   };
 
@@ -296,14 +330,14 @@
     hero: '.hero-section', logos: '.logos-section', 'about-preview': '.about-preview-section',
     services: '#services-section', marine: '.marine-section', stats: '#stats-section',
     projects: '#projects-section', leadership: '.leadership-section', cta: '.cta-section',
-    header: 'header', footer: 'footer'
+    header: 'header', footer: 'footer',
+    'blog-hero': '.hero-banner', 'blog-posts': '.section',
+    'about-hero': '.hero-banner', 'services-hero': '.hero-banner',
+    'projects-hero': '.hero-banner', 'careers-hero': '.hero-banner', 'clients-hero': '.hero-banner'
   };
 
-  function renderContentEditor() {
-    var currentPath = state.editingPage || '/';
-    var currentPageObj = state.pages.find(function(p) { return p.path === currentPath; }) || state.pages[0];
-
-    var sections = [
+  var pageSections = {
+    '/': [
       { id: 'header', name: 'Header & Navigation', group: 'Global' },
       { id: 'footer', name: 'Footer', group: 'Global' },
       { id: 'hero', name: 'Hero Section', group: 'Page Sections' },
@@ -315,7 +349,45 @@
       { id: 'projects', name: 'Projects Showcase', group: 'Page Sections' },
       { id: 'leadership', name: 'Leadership', group: 'Page Sections' },
       { id: 'cta', name: 'Call to Action', group: 'Page Sections' }
-    ];
+    ],
+    '/blog': [
+      { id: 'header', name: 'Header & Navigation', group: 'Global' },
+      { id: 'footer', name: 'Footer', group: 'Global' },
+      { id: 'blog-hero', name: 'Blog Hero Banner', group: 'Page Sections' },
+      { id: 'blog-posts', name: 'Blog Posts Section', group: 'Page Sections' }
+    ],
+    '/about': [
+      { id: 'header', name: 'Header & Navigation', group: 'Global' },
+      { id: 'footer', name: 'Footer', group: 'Global' },
+      { id: 'about-hero', name: 'About Hero Banner', group: 'Page Sections' }
+    ],
+    '/services': [
+      { id: 'header', name: 'Header & Navigation', group: 'Global' },
+      { id: 'footer', name: 'Footer', group: 'Global' },
+      { id: 'services-hero', name: 'Services Hero Banner', group: 'Page Sections' }
+    ],
+    '/projects': [
+      { id: 'header', name: 'Header & Navigation', group: 'Global' },
+      { id: 'footer', name: 'Footer', group: 'Global' },
+      { id: 'projects-hero', name: 'Projects Hero Banner', group: 'Page Sections' }
+    ],
+    '/clients': [
+      { id: 'header', name: 'Header & Navigation', group: 'Global' },
+      { id: 'footer', name: 'Footer', group: 'Global' },
+      { id: 'clients-hero', name: 'Clients Hero Banner', group: 'Page Sections' }
+    ],
+    '/careers': [
+      { id: 'header', name: 'Header & Navigation', group: 'Global' },
+      { id: 'footer', name: 'Footer', group: 'Global' },
+      { id: 'careers-hero', name: 'Careers Hero Banner', group: 'Page Sections' }
+    ]
+  };
+
+  function renderContentEditor() {
+    var currentPath = state.editingPage || '/';
+    var currentPageObj = state.pages.find(function(p) { return p.path === currentPath; }) || state.pages[0];
+
+    var sections = pageSections[currentPath] || pageSections['/'];
 
     var sectionsList = '';
     var currentGroup = '';
@@ -457,6 +529,8 @@
     if (pageSelector) {
       pageSelector.addEventListener('change', function() {
         state.editingPage = this.value;
+        state.editingSection = null;
+        state.editedContent = {};
         renderPage('content');
         bindEditorActions();
       });

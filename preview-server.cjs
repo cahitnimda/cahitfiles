@@ -1075,7 +1075,7 @@ app.get('/blog', async (req, res) => {
             </div>
           </div>`;
         });
-        html = html.replace(/(<div class="blog-grid"[^>]*>)([\s\S]*?)(<\/div>\s*<\/div>\s*<\/section>\s*$)/m, '$1' + postsHtml + '$3');
+        html = html.replace(/(<div class="grid grid-3 gap-8">)([\s\S]*?)(<\/div>\s*<\/div>\s*<\/section>)/m, '$1' + postsHtml + '$3');
       }
     } catch(e) { console.error('Blog load error:', e.message); }
   }

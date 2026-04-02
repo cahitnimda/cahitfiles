@@ -145,7 +145,7 @@
       case 'pages': content.innerHTML = renderPages(); bindPageActions(); break;
       case 'content': content.innerHTML = renderContentEditor(); bindEditorActions(); break;
       case 'media': content.innerHTML = renderMedia(); bindMediaActions(); break;
-      case 'blog': content.innerHTML = renderBlogManager(); break;
+      case 'blog': content.innerHTML = renderBlogManager(); loadBlogPosts(); break;
       case 'leads': content.innerHTML = renderLeads(); break;
       case 'analytics': content.innerHTML = renderAnalytics(); break;
       case 'chatbot': content.innerHTML = renderChatbotKnowledge(); bindChatbotActions(); break;

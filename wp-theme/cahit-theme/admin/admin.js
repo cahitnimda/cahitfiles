@@ -300,29 +300,96 @@
       { key: 'blog-section-subtitle', label: 'Section Subtitle', selector: '.section-subtitle', type: 'textarea', defaultVal: 'Stay up to date with our latest projects, industry insights, and company news.' }
     ],
     'about-hero': [
-      { key: 'about-hero-title', label: 'About Page Title', selector: '.hero-banner-title', type: 'text', defaultVal: 'About Us' },
-      { key: 'about-hero-subtitle', label: 'About Subtitle', selector: '.hero-banner-subtitle', type: 'textarea', defaultVal: '' },
+      { key: 'about-hero-title', label: 'Page Title', selector: '.hero-banner-title', type: 'text', defaultVal: 'About Cahit Trading & Contracting' },
+      { key: 'about-hero-subtitle', label: 'Subtitle', selector: '.hero-banner-subtitle', type: 'textarea', defaultVal: 'Cahit Trading & Contracting LLC partners with government authorities, developers, and industrial organizations to deliver complex infrastructure and marine construction projects across Oman.' },
       { key: 'about-hero-bg', label: 'Hero Background Image', selector: '.hero-banner-bg', type: 'image', attr: 'src', defaultVal: '' }
     ],
+    'about-overview': [
+      { key: 'about-overview-title', label: 'Section Title', selector: '[data-testid=section-company-overview] .section-title', type: 'text', defaultVal: 'Company Overview' },
+      { key: 'about-overview-p1', label: 'Paragraph 1', selector: '[data-testid=section-company-overview] p:nth-of-type(1)', type: 'textarea', defaultVal: '' },
+      { key: 'about-overview-p2', label: 'Paragraph 2', selector: '[data-testid=section-company-overview] p:nth-of-type(2)', type: 'textarea', defaultVal: '' }
+    ],
+    'about-mission': [
+      { key: 'about-mission-title', label: 'Mission Title', selector: '[data-testid=section-mission-vision] .card-title:nth-of-type(1)', type: 'text', defaultVal: 'Our Mission' },
+      { key: 'about-mission-text', label: 'Mission Text', selector: '[data-testid=section-mission-vision] .card:nth-child(1) p', type: 'textarea', defaultVal: '' },
+      { key: 'about-vision-title', label: 'Vision Title', selector: '[data-testid=section-mission-vision] .card:nth-child(2) .card-title', type: 'text', defaultVal: 'Our Vision' },
+      { key: 'about-vision-text', label: 'Vision Text', selector: '[data-testid=section-mission-vision] .card:nth-child(2) p', type: 'textarea', defaultVal: '' }
+    ],
+    'about-leadership': [
+      { key: 'about-leadership-title', label: 'Section Title', selector: '[data-testid=section-leadership] .section-title', type: 'text', defaultVal: 'Leadership' }
+    ],
+    'about-commitment': [
+      { key: 'about-commitment-title', label: 'Section Title', selector: '[data-testid=section-commitment] .section-title', type: 'text', defaultVal: 'Our Commitment' }
+    ],
     'services-hero': [
-      { key: 'services-hero-title', label: 'Services Page Title', selector: '.hero-banner-title', type: 'text', defaultVal: 'Our Services' },
-      { key: 'services-hero-subtitle', label: 'Services Subtitle', selector: '.hero-banner-subtitle', type: 'textarea', defaultVal: '' },
-      { key: 'services-hero-bg', label: 'Hero Background Image', selector: '.hero-banner-bg', type: 'image', attr: 'src', defaultVal: '' }
+      { key: 'services-hero-title', label: 'Page Title', selector: '.hero-banner-title', type: 'text', defaultVal: 'Our Services' },
+      { key: 'services-hero-subtitle', label: 'Subtitle', selector: '.hero-banner-subtitle', type: 'textarea', defaultVal: 'Our diverse expertise allows us to support complex infrastructure projects across multiple sectors.' },
+      { key: 'services-hero-video', label: 'Hero Background Video', selector: '.hero-banner-video source', type: 'video', attr: 'src', defaultVal: '' }
+    ],
+    'services-list': [
+      { key: 'services-card1-title', label: 'Service 1 Title', selector: '[data-testid=section-services-list] .service-card:nth-child(1) .service-card-title', type: 'text', defaultVal: 'Marine & Coastal Construction' },
+      { key: 'services-card1-desc', label: 'Service 1 Description', selector: '[data-testid=section-services-list] .service-card:nth-child(1) .service-card-desc', type: 'textarea', defaultVal: '' },
+      { key: 'services-card2-title', label: 'Service 2 Title', selector: '[data-testid=section-services-list] .service-card:nth-child(2) .service-card-title', type: 'text', defaultVal: 'Infrastructure Development' },
+      { key: 'services-card2-desc', label: 'Service 2 Description', selector: '[data-testid=section-services-list] .service-card:nth-child(2) .service-card-desc', type: 'textarea', defaultVal: '' },
+      { key: 'services-card3-title', label: 'Service 3 Title', selector: '[data-testid=section-services-list] .service-card:nth-child(3) .service-card-title', type: 'text', defaultVal: 'Earthworks' },
+      { key: 'services-card3-desc', label: 'Service 3 Description', selector: '[data-testid=section-services-list] .service-card:nth-child(3) .service-card-desc', type: 'textarea', defaultVal: '' },
+      { key: 'services-card4-title', label: 'Service 4 Title', selector: '[data-testid=section-services-list] .service-card:nth-child(4) .service-card-title', type: 'text', defaultVal: 'Dewatering & Shoring' },
+      { key: 'services-card4-desc', label: 'Service 4 Description', selector: '[data-testid=section-services-list] .service-card:nth-child(4) .service-card-desc', type: 'textarea', defaultVal: '' },
+      { key: 'services-card5-title', label: 'Service 5 Title', selector: '[data-testid=section-services-list] .service-card:nth-child(5) .service-card-title', type: 'text', defaultVal: 'MEP Works' },
+      { key: 'services-card5-desc', label: 'Service 5 Description', selector: '[data-testid=section-services-list] .service-card:nth-child(5) .service-card-desc', type: 'textarea', defaultVal: '' },
+      { key: 'services-card6-title', label: 'Service 6 Title', selector: '[data-testid=section-services-list] .service-card:nth-child(6) .service-card-title', type: 'text', defaultVal: 'General Construction' },
+      { key: 'services-card6-desc', label: 'Service 6 Description', selector: '[data-testid=section-services-list] .service-card:nth-child(6) .service-card-desc', type: 'textarea', defaultVal: '' }
+    ],
+    'services-cta': [
+      { key: 'services-cta-title', label: 'CTA Title', selector: '[data-testid=section-cta] .cta-title', type: 'text', defaultVal: "Let's Build Your Next Project" },
+      { key: 'services-cta-subtitle', label: 'CTA Subtitle', selector: '[data-testid=section-cta] .cta-subtitle', type: 'textarea', defaultVal: '' },
+      { key: 'services-cta-btn', label: 'CTA Button Text', selector: '[data-testid=section-cta] .btn', type: 'text', defaultVal: 'Start a Conversation' }
     ],
     'projects-hero': [
-      { key: 'projects-hero-title', label: 'Projects Page Title', selector: '.hero-banner-title', type: 'text', defaultVal: 'Our Projects' },
-      { key: 'projects-hero-subtitle', label: 'Projects Subtitle', selector: '.hero-banner-subtitle', type: 'textarea', defaultVal: '' },
+      { key: 'projects-hero-title', label: 'Page Title', selector: '.hero-banner-title', type: 'text', defaultVal: 'Our Projects' },
+      { key: 'projects-hero-subtitle', label: 'Subtitle', selector: '.hero-banner-subtitle', type: 'textarea', defaultVal: 'Delivering excellence across marine, infrastructure, and industrial projects throughout Oman.' },
       { key: 'projects-hero-bg', label: 'Hero Background Image', selector: '.hero-banner-bg', type: 'image', attr: 'src', defaultVal: '' }
     ],
-    'careers-hero': [
-      { key: 'careers-hero-title', label: 'Careers Page Title', selector: '.hero-banner-title', type: 'text', defaultVal: 'Careers' },
-      { key: 'careers-hero-subtitle', label: 'Careers Subtitle', selector: '.hero-banner-subtitle', type: 'textarea', defaultVal: '' },
-      { key: 'careers-hero-bg', label: 'Hero Background Image', selector: '.hero-banner-bg', type: 'image', attr: 'src', defaultVal: '' }
+    'projects-grid': [
+      { key: 'projects-card1-title', label: 'Project 1 Title', selector: '[data-testid=section-projects-grid] .project-card:nth-child(1) .project-card-title', type: 'text', defaultVal: 'Seaport Infrastructure' },
+      { key: 'projects-card1-img', label: 'Project 1 Image', selector: '[data-testid=section-projects-grid] .project-card:nth-child(1) img', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'projects-card2-title', label: 'Project 2 Title', selector: '[data-testid=section-projects-grid] .project-card:nth-child(2) .project-card-title', type: 'text', defaultVal: 'Coastal Protection Systems' },
+      { key: 'projects-card2-img', label: 'Project 2 Image', selector: '[data-testid=section-projects-grid] .project-card:nth-child(2) img', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'projects-card3-title', label: 'Project 3 Title', selector: '[data-testid=section-projects-grid] .project-card:nth-child(3) .project-card-title', type: 'text', defaultVal: 'Road Infrastructure Development' },
+      { key: 'projects-card3-img', label: 'Project 3 Image', selector: '[data-testid=section-projects-grid] .project-card:nth-child(3) img', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'projects-card4-title', label: 'Project 4 Title', selector: '[data-testid=section-projects-grid] .project-card:nth-child(4) .project-card-title', type: 'text', defaultVal: 'Asphalt Paving Works' },
+      { key: 'projects-card4-img', label: 'Project 4 Image', selector: '[data-testid=section-projects-grid] .project-card:nth-child(4) img', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'projects-card5-title', label: 'Project 5 Title', selector: '[data-testid=section-projects-grid] .project-card:nth-child(5) .project-card-title', type: 'text', defaultVal: 'Underground Pipe Installation' },
+      { key: 'projects-card5-img', label: 'Project 5 Image', selector: '[data-testid=section-projects-grid] .project-card:nth-child(5) img', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'projects-card6-title', label: 'Project 6 Title', selector: '[data-testid=section-projects-grid] .project-card:nth-child(6) .project-card-title', type: 'text', defaultVal: 'Concrete Formwork' },
+      { key: 'projects-card6-img', label: 'Project 6 Image', selector: '[data-testid=section-projects-grid] .project-card:nth-child(6) img', type: 'image', attr: 'src', defaultVal: '' }
     ],
     'clients-hero': [
-      { key: 'clients-hero-title', label: 'Clients Page Title', selector: '.hero-banner-title', type: 'text', defaultVal: 'Our Clients' },
-      { key: 'clients-hero-subtitle', label: 'Clients Subtitle', selector: '.hero-banner-subtitle', type: 'textarea', defaultVal: '' },
+      { key: 'clients-hero-title', label: 'Page Title', selector: '.hero-banner-title', type: 'text', defaultVal: 'Our Clients' },
+      { key: 'clients-hero-subtitle', label: 'Subtitle', selector: '.hero-banner-subtitle', type: 'textarea', defaultVal: 'Trusted by leading organizations across the Sultanate of Oman and the wider Gulf region.' },
       { key: 'clients-hero-bg', label: 'Hero Background Image', selector: '.hero-banner-bg', type: 'image', attr: 'src', defaultVal: '' }
+    ],
+    'clients-grid': [
+      { key: 'clients-section-title', label: 'Section Title', selector: '[data-testid=section-clients-grid] .section-title', type: 'text', defaultVal: 'Trusted by Leading Organizations' }
+    ],
+    'clients-sectors': [
+      { key: 'clients-sectors-title', label: 'Section Title', selector: '[data-testid=section-sectors] .section-title', type: 'text', defaultVal: 'Sectors We Serve' }
+    ],
+    'careers-hero': [
+      { key: 'careers-hero-title', label: 'Page Title', selector: '.hero-banner-title', type: 'text', defaultVal: 'Careers' },
+      { key: 'careers-hero-subtitle', label: 'Subtitle', selector: '.hero-banner-subtitle', type: 'textarea', defaultVal: 'Join our team and help build the future of Oman\'s infrastructure.' },
+      { key: 'careers-hero-bg', label: 'Hero Background Image', selector: '.hero-banner-bg', type: 'image', attr: 'src', defaultVal: '' }
+    ],
+    'careers-intro': [
+      { key: 'careers-intro-title', label: 'Section Title', selector: '[data-testid=section-careers-intro] .section-title', type: 'text', defaultVal: 'Work With Us' },
+      { key: 'careers-culture-title', label: 'Team Culture Title', selector: '[data-testid=section-careers-intro] .commitment-title:nth-of-type(1)', type: 'text', defaultVal: 'Team Culture' },
+      { key: 'careers-growth-title', label: 'Professional Growth Title', selector: '[data-testid=section-careers-intro] .commitment-title:nth-of-type(2)', type: 'text', defaultVal: 'Professional Growth' },
+      { key: 'careers-safety-title', label: 'Safety First Title', selector: '[data-testid=section-careers-intro] .commitment-title:nth-of-type(3)', type: 'text', defaultVal: 'Safety First' }
+    ],
+    'careers-cta': [
+      { key: 'careers-cta-title', label: 'CTA Title', selector: '[data-testid=section-careers-cta] .cta-title', type: 'text', defaultVal: 'Interested in Joining Our Team?' },
+      { key: 'careers-cta-subtitle', label: 'CTA Subtitle', selector: '[data-testid=section-careers-cta] .cta-subtitle', type: 'textarea', defaultVal: '' },
+      { key: 'careers-cta-btn', label: 'CTA Button Text', selector: '[data-testid=section-careers-cta] .btn', type: 'text', defaultVal: 'Get in Touch' }
     ]
   };
 
@@ -331,9 +398,17 @@
     services: '#services-section', marine: '.marine-section', stats: '#stats-section',
     projects: '#projects-section', leadership: '.leadership-section', cta: '.cta-section',
     header: 'header', footer: 'footer',
-    'blog-hero': '.hero-banner', 'blog-posts': '.section',
-    'about-hero': '.hero-banner', 'services-hero': '.hero-banner',
-    'projects-hero': '.hero-banner', 'careers-hero': '.hero-banner', 'clients-hero': '.hero-banner'
+    'blog-hero': '[data-testid=section-blog-hero]', 'blog-posts': '[data-testid=section-blog-posts]',
+    'about-hero': '[data-testid=section-about-hero]', 'about-overview': '[data-testid=section-company-overview]',
+    'about-mission': '[data-testid=section-mission-vision]', 'about-leadership': '[data-testid=section-leadership]',
+    'about-commitment': '[data-testid=section-commitment]',
+    'services-hero': '[data-testid=section-services-hero]', 'services-list': '[data-testid=section-services-list]',
+    'services-cta': '[data-testid=section-cta]',
+    'projects-hero': '[data-testid=section-projects-hero]', 'projects-grid': '[data-testid=section-projects-grid]',
+    'clients-hero': '[data-testid=section-clients-hero]', 'clients-grid': '[data-testid=section-clients-grid]',
+    'clients-sectors': '[data-testid=section-sectors]',
+    'careers-hero': '[data-testid=section-careers-hero]', 'careers-intro': '[data-testid=section-careers-intro]',
+    'careers-cta': '[data-testid=section-careers-cta]'
   };
 
   var pageSections = {
@@ -353,33 +428,44 @@
     '/blog': [
       { id: 'header', name: 'Header & Navigation', group: 'Global' },
       { id: 'footer', name: 'Footer', group: 'Global' },
-      { id: 'blog-hero', name: 'Blog Hero Banner', group: 'Page Sections' },
+      { id: 'blog-hero', name: 'Hero Banner', group: 'Page Sections' },
       { id: 'blog-posts', name: 'Blog Posts Section', group: 'Page Sections' }
     ],
     '/about': [
       { id: 'header', name: 'Header & Navigation', group: 'Global' },
       { id: 'footer', name: 'Footer', group: 'Global' },
-      { id: 'about-hero', name: 'About Hero Banner', group: 'Page Sections' }
+      { id: 'about-hero', name: 'Hero Banner', group: 'Page Sections' },
+      { id: 'about-overview', name: 'Company Overview', group: 'Page Sections' },
+      { id: 'about-mission', name: 'Mission & Vision', group: 'Page Sections' },
+      { id: 'about-leadership', name: 'Leadership', group: 'Page Sections' },
+      { id: 'about-commitment', name: 'Our Commitment', group: 'Page Sections' }
     ],
     '/services': [
       { id: 'header', name: 'Header & Navigation', group: 'Global' },
       { id: 'footer', name: 'Footer', group: 'Global' },
-      { id: 'services-hero', name: 'Services Hero Banner', group: 'Page Sections' }
+      { id: 'services-hero', name: 'Hero Banner', group: 'Page Sections' },
+      { id: 'services-list', name: 'Service Cards', group: 'Page Sections' },
+      { id: 'services-cta', name: 'Call to Action', group: 'Page Sections' }
     ],
     '/projects': [
       { id: 'header', name: 'Header & Navigation', group: 'Global' },
       { id: 'footer', name: 'Footer', group: 'Global' },
-      { id: 'projects-hero', name: 'Projects Hero Banner', group: 'Page Sections' }
+      { id: 'projects-hero', name: 'Hero Banner', group: 'Page Sections' },
+      { id: 'projects-grid', name: 'Project Cards', group: 'Page Sections' }
     ],
     '/clients': [
       { id: 'header', name: 'Header & Navigation', group: 'Global' },
       { id: 'footer', name: 'Footer', group: 'Global' },
-      { id: 'clients-hero', name: 'Clients Hero Banner', group: 'Page Sections' }
+      { id: 'clients-hero', name: 'Hero Banner', group: 'Page Sections' },
+      { id: 'clients-grid', name: 'Client Logos', group: 'Page Sections' },
+      { id: 'clients-sectors', name: 'Sectors We Serve', group: 'Page Sections' }
     ],
     '/careers': [
       { id: 'header', name: 'Header & Navigation', group: 'Global' },
       { id: 'footer', name: 'Footer', group: 'Global' },
-      { id: 'careers-hero', name: 'Careers Hero Banner', group: 'Page Sections' }
+      { id: 'careers-hero', name: 'Hero Banner', group: 'Page Sections' },
+      { id: 'careers-intro', name: 'Work With Us', group: 'Page Sections' },
+      { id: 'careers-cta', name: 'Call to Action', group: 'Page Sections' }
     ]
   };
 

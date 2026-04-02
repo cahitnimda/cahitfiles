@@ -1030,35 +1030,102 @@ app.get('/admin/api/pages', (req, res) => {
   res.json({ success: true, data: pages });
 });
 
+// Apply saved content from DB to rendered HTML
+async function applySavedContent(html, sectionKeys) {
+  if (!dbPool) return html;
+  try {
+    for (const sectionKey of sectionKeys) {
+      const r = await dbQuery('SELECT value FROM site_settings WHERE key=$1', ['content_' + sectionKey]);
+      if (r.rows.length > 0) {
+        const data = JSON.parse(r.rows[0].value);
+        for (const [field, value] of Object.entries(data)) {
+          if (!value) continue;
+          const escaped = value.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          const selectorMap = {
+            'blog-hero-title': { tag: 'h1', attr: 'class', attrVal: 'hero-banner-title' },
+            'blog-hero-subtitle': { tag: 'p', attr: 'class', attrVal: 'hero-banner-subtitle' },
+            'blog-section-title': { tag: 'h2', attr: 'class', attrVal: 'section-title' },
+            'blog-section-subtitle': { tag: 'p', attr: 'class', attrVal: 'section-subtitle' },
+            'about-hero-title': { tag: 'h1', attr: 'class', attrVal: 'hero-banner-title' },
+            'about-hero-subtitle': { tag: 'p', attr: 'class', attrVal: 'hero-banner-subtitle' },
+            'about-overview-title': { tag: 'h2', attr: 'data-testid', attrVal: 'text-overview-title' },
+            'services-hero-title': { tag: 'h1', attr: 'data-testid', attrVal: 'text-services-heading' },
+            'services-hero-subtitle': { tag: 'p', attr: 'class', attrVal: 'hero-banner-subtitle' },
+            'projects-hero-title': { tag: 'h1', attr: 'data-testid', attrVal: 'text-projects-heading' },
+            'projects-hero-subtitle': { tag: 'p', attr: 'class', attrVal: 'hero-banner-subtitle' },
+            'clients-hero-title': { tag: 'h1', attr: 'data-testid', attrVal: 'text-clients-heading' },
+            'clients-hero-subtitle': { tag: 'p', attr: 'class', attrVal: 'hero-banner-subtitle' },
+            'careers-hero-title': { tag: 'h1', attr: 'data-testid', attrVal: 'text-careers-heading' },
+            'careers-hero-subtitle': { tag: 'p', attr: 'class', attrVal: 'hero-banner-subtitle' },
+            'services-cta-title': { tag: 'h2', attr: 'class', attrVal: 'cta-title' },
+            'careers-cta-title': { tag: 'h2', attr: 'class', attrVal: 'cta-title' },
+            'hero-title-line1': { tag: 'span', attr: 'class', attrVal: 'hero-title' },
+            'hero-subtitle': { tag: 'p', attr: 'class', attrVal: 'hero-subtitle' },
+          };
+          const mapping = selectorMap[field];
+          if (mapping) {
+            const regex = new RegExp(
+              '(<' + mapping.tag + '[^>]*' + mapping.attr + '=["\'][^"\']*' + mapping.attrVal + '[^"\']*["\'][^>]*>)([\\s\\S]*?)(</' + mapping.tag + '>)',
+              'i'
+            );
+            const match = html.match(regex);
+            if (match) {
+              html = html.replace(match[0], match[1] + value + match[3]);
+            }
+          }
+          if (field.endsWith('-bg') || field.endsWith('-img')) {
+            const imgRegex = /(<img[^>]*class="[^"]*hero-banner-bg[^"]*"[^>]*src=")[^"]*(")/i;
+            if (imgRegex.test(html)) {
+              html = html.replace(imgRegex, '$1' + value + '$2');
+            }
+          }
+        }
+      }
+    }
+  } catch(e) { console.error('Apply saved content error:', e.message); }
+  return html;
+}
+
 // Page routes
-app.get('/', (req, res) => {
+app.get('/', async (req, res) => {
   const content = readThemeFile('front-page.php');
-  res.send(executePhpTemplate(content, 'home'));
+  let html = executePhpTemplate(content, 'home');
+  html = await applySavedContent(html, ['hero', 'logos', 'about-preview', 'services', 'marine', 'stats', 'projects', 'leadership', 'cta', 'header', 'footer']);
+  res.send(html);
 });
 
-app.get('/about', (req, res) => {
+app.get('/about', async (req, res) => {
   const content = readThemeFile('page-about.php');
-  res.send(executePhpTemplate(content, 'about'));
+  let html = executePhpTemplate(content, 'about');
+  html = await applySavedContent(html, ['about-hero', 'about-overview', 'about-mission', 'about-leadership', 'about-commitment', 'header', 'footer']);
+  res.send(html);
 });
 
-app.get('/services', (req, res) => {
+app.get('/services', async (req, res) => {
   const content = readThemeFile('page-services.php');
-  res.send(executePhpTemplate(content, 'services'));
+  let html = executePhpTemplate(content, 'services');
+  html = await applySavedContent(html, ['services-hero', 'services-list', 'services-cta', 'header', 'footer']);
+  res.send(html);
 });
 
-app.get('/projects', (req, res) => {
+app.get('/projects', async (req, res) => {
   const content = readThemeFile('page-projects.php');
-  res.send(executePhpTemplate(content, 'projects'));
+  let html = executePhpTemplate(content, 'projects');
+  html = await applySavedContent(html, ['projects-hero', 'projects-grid', 'header', 'footer']);
+  res.send(html);
 });
 
-app.get('/clients', (req, res) => {
+app.get('/clients', async (req, res) => {
   const content = readThemeFile('page-clients.php');
-  res.send(executePhpTemplate(content, 'clients'));
+  let html = executePhpTemplate(content, 'clients');
+  html = await applySavedContent(html, ['clients-hero', 'clients-grid', 'clients-sectors', 'header', 'footer']);
+  res.send(html);
 });
 
 app.get('/blog', async (req, res) => {
   let content = readThemeFile('page-blog.php');
   let html = executePhpTemplate(content, 'blog');
+  html = await applySavedContent(html, ['blog-hero', 'blog-posts', 'header', 'footer']);
   if (dbPool) {
     try {
       const r = await dbQuery("SELECT * FROM blog_posts WHERE status='published' ORDER BY created_at DESC LIMIT 20");
@@ -1082,9 +1149,11 @@ app.get('/blog', async (req, res) => {
   res.send(html);
 });
 
-app.get('/careers', (req, res) => {
+app.get('/careers', async (req, res) => {
   const content = readThemeFile('page-careers.php');
-  res.send(executePhpTemplate(content, 'careers'));
+  let html = executePhpTemplate(content, 'careers');
+  html = await applySavedContent(html, ['careers-hero', 'careers-intro', 'careers-cta', 'header', 'footer']);
+  res.send(html);
 });
 
 app.get('/blog/:slug', async (req, res) => {

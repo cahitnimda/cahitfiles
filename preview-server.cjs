@@ -725,6 +725,93 @@ app.post('/api/chat', express.json(), async (req, res) => {
   }
 });
 
+app.post('/admin/api/ai-blog-generate', express.json(), async (req, res) => {
+  const { topic, type, language, sourceText } = req.body || {};
+  if (!topic && !sourceText) return res.json({ success: false, error: 'Please provide a topic or source text' });
+
+  const apiKey = await loadOpenAIKeyAsync();
+  if (!apiKey) {
+    return res.json({ success: false, error: 'No OpenAI API key configured. Add one in Chatbot Knowledge > API Integrations.' });
+  }
+
+  const langInstructions = language === 'ar'
+    ? 'Write entirely in Arabic. Use formal Modern Standard Arabic.'
+    : 'Write entirely in English.';
+
+  const typeInstructions = {
+    'full-post': 'Write a full blog post with introduction, 3-4 sections with subheadings (use ## for headings), and a conclusion. Approximately 600-800 words.',
+    'outline': 'Write a detailed blog post outline with a title, 5-7 main sections, and 2-3 bullet points under each section.',
+    'title-ideas': 'Generate 10 compelling blog post title ideas for this topic. Return them as a numbered list. Each title should be catchy and SEO-friendly.',
+    'excerpt': 'Write a compelling 2-3 sentence blog post excerpt/summary that would make readers want to click and read more.',
+    'seo-meta': 'Write an SEO-optimized meta title (under 60 characters) and meta description (under 160 characters). Also suggest 5-8 SEO keywords. Format:\nMETA TITLE: ...\nMETA DESCRIPTION: ...\nKEYWORDS: keyword1, keyword2, ...',
+    'translate': 'Translate the following text to ' + (language === 'ar' ? 'Arabic (Modern Standard Arabic, formal)' : 'English') + '. Preserve all formatting, headings, and structure. Only output the translation, nothing else.\n\nText to translate:\n' + (sourceText || ''),
+    'improve': 'Improve and polish the following blog content. Fix grammar, enhance clarity, make it more engaging and professional. Preserve the structure and meaning. Only output the improved text.\n\nText to improve:\n' + (sourceText || ''),
+    'image-prompt': 'Generate a detailed image generation prompt for a blog post cover image about this topic. The image should be professional, suitable for a marine/coastal construction company blog. Describe the scene, style, colors, composition in detail. The prompt should work with DALL-E or similar AI image generators. Only output the image prompt, nothing else.'
+  };
+
+  const prompt = typeInstructions[type] || typeInstructions['full-post'];
+  const userMsg = (type === 'translate' || type === 'improve') ? prompt : (prompt + '\n\nTopic: ' + topic);
+
+  try {
+    const systemMsg = 'You are an expert content writer for Cahit Trading & Contracting LLC, a marine and coastal construction company based in Muscat, Oman. ' +
+      'The company specializes in marine construction, infrastructure, earthworks, dewatering, and MEP works. ' +
+      'Write professional, authoritative content that demonstrates industry expertise. ' +
+      ((type !== 'translate' && type !== 'improve') ? langInstructions : '');
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemMsg },
+          { role: 'user', content: userMsg }
+        ],
+        max_tokens: 3000,
+        temperature: 0.7
+      })
+    });
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    const content = data.choices[0].message.content;
+    res.json({ success: true, content });
+  } catch (err) {
+    console.error('AI blog generation error:', err.message || err);
+    res.json({ success: false, error: err.message || 'AI generation failed' });
+  }
+});
+
+app.post('/admin/api/ai-blog-image', express.json(), async (req, res) => {
+  const { prompt } = req.body || {};
+  if (!prompt) return res.json({ success: false, error: 'Please provide an image prompt' });
+
+  const apiKey = await loadOpenAIKeyAsync();
+  if (!apiKey) {
+    return res.json({ success: false, error: 'No OpenAI API key configured.' });
+  }
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({
+        model: 'dall-e-3',
+        prompt: prompt,
+        n: 1,
+        size: '1792x1024',
+        quality: 'standard'
+      })
+    });
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    const imageUrl = data.data[0].url;
+    res.json({ success: true, url: imageUrl });
+  } catch (err) {
+    console.error('AI image generation error:', err.message || err);
+    res.json({ success: false, error: err.message || 'Image generation failed' });
+  }
+});
+
 // Admin dashboard
 const ADMIN_DIR = path.join(THEME_DIR, 'admin');
 

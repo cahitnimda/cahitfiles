@@ -1961,27 +1961,236 @@
     }).catch(function() { showToast('Error updating status', 'error'); });
   };
 
+  function aiBlogCall(type, topic, language, sourceText) {
+    return fetch('/admin/api/ai-blog-generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: type, topic: topic, language: language || 'en', sourceText: sourceText || '' })
+    }).then(function(r) { return r.json(); });
+  }
+
   window.openBlogEditor = function(post) {
     var overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center';
-    overlay.innerHTML = '<div style="background:#fff;border-radius:12px;padding:24px;width:90%;max-width:700px;max-height:85vh;overflow-y:auto;position:relative">' +
-      '<button onclick="this.closest(\'.modal-overlay\').remove()" style="position:absolute;top:12px;right:12px;background:none;border:none;font-size:22px;cursor:pointer;color:#64748b">&times;</button>' +
-      '<h3 style="margin:0 0 16px;color:#0A3D6B">' + (post ? 'Edit Post' : 'New Blog Post') + '</h3>' +
-      '<div class="form-group"><label class="form-label">Title (English)</label><input class="form-input" id="bp-title" value="' + (post ? (post.title || '').replace(/"/g,'&quot;') : '') + '" /></div>' +
-      '<div class="form-group"><label class="form-label">Title (Arabic)</label><input class="form-input" id="bp-title-ar" value="' + (post ? (post.title_ar || '').replace(/"/g,'&quot;') : '') + '" dir="rtl" /></div>' +
-      '<div class="form-group"><label class="form-label">Excerpt (English)</label><textarea class="form-textarea" id="bp-excerpt" rows="2">' + (post ? (post.excerpt || '') : '') + '</textarea></div>' +
-      '<div class="form-group"><label class="form-label">Excerpt (Arabic)</label><textarea class="form-textarea" id="bp-excerpt-ar" rows="2" dir="rtl">' + (post ? (post.excerpt_ar || '') : '') + '</textarea></div>' +
-      '<div class="form-group"><label class="form-label">Content (English)</label><textarea class="form-textarea" id="bp-content" rows="6">' + (post ? (post.content || '') : '') + '</textarea></div>' +
-      '<div class="form-group"><label class="form-label">Content (Arabic)</label><textarea class="form-textarea" id="bp-content-ar" rows="6" dir="rtl">' + (post ? (post.content_ar || '') : '') + '</textarea></div>' +
-      '<div class="form-group"><label class="form-label">Image URL</label><input class="form-input" id="bp-image" value="' + (post ? (post.image_url || '').replace(/"/g,'&quot;') : '') + '" /></div>' +
-      '<div class="form-group"><label class="form-label">Slug</label><input class="form-input" id="bp-slug" value="' + (post ? (post.slug || '').replace(/"/g,'&quot;') : '') + '" placeholder="auto-generated-from-title" /></div>' +
-      '<div style="display:flex;gap:8px;margin-top:16px">' +
-        '<button class="btn btn-primary" id="bp-save" data-id="' + (post ? post.id : '') + '">Save Post</button>' +
-        '<button class="btn btn-outline" onclick="this.closest(\'.modal-overlay\').remove()">Cancel</button>' +
+    overlay.innerHTML = '<div style="background:#fff;border-radius:12px;padding:0;width:95%;max-width:1100px;max-height:90vh;overflow:hidden;position:relative;display:flex">' +
+
+      '<div style="flex:1;padding:24px;overflow-y:auto;border-right:1px solid #e2e8f0">' +
+        '<button onclick="this.closest(\'.modal-overlay\').remove()" style="position:absolute;top:12px;right:12px;background:none;border:none;font-size:22px;cursor:pointer;color:#64748b;z-index:10">&times;</button>' +
+        '<h3 style="margin:0 0 16px;color:#0A3D6B">' + (post ? 'Edit Post' : 'New Blog Post') + '</h3>' +
+        '<div class="form-group"><label class="form-label">Title (English)</label><input class="form-input" id="bp-title" data-testid="input-blog-title" value="' + (post ? (post.title || '').replace(/"/g,'&quot;') : '') + '" /></div>' +
+        '<div class="form-group"><label class="form-label">Title (Arabic)</label><input class="form-input" id="bp-title-ar" data-testid="input-blog-title-ar" value="' + (post ? (post.title_ar || '').replace(/"/g,'&quot;') : '') + '" dir="rtl" /></div>' +
+        '<div class="form-group"><label class="form-label">Excerpt (English)</label><textarea class="form-textarea" id="bp-excerpt" data-testid="input-blog-excerpt" rows="2">' + (post ? (post.excerpt || '') : '') + '</textarea></div>' +
+        '<div class="form-group"><label class="form-label">Excerpt (Arabic)</label><textarea class="form-textarea" id="bp-excerpt-ar" data-testid="input-blog-excerpt-ar" rows="2" dir="rtl">' + (post ? (post.excerpt_ar || '') : '') + '</textarea></div>' +
+        '<div class="form-group"><label class="form-label">Content (English)</label><textarea class="form-textarea" id="bp-content" data-testid="input-blog-content" rows="8">' + (post ? (post.content || '') : '') + '</textarea></div>' +
+        '<div class="form-group"><label class="form-label">Content (Arabic)</label><textarea class="form-textarea" id="bp-content-ar" data-testid="input-blog-content-ar" rows="8" dir="rtl">' + (post ? (post.content_ar || '') : '') + '</textarea></div>' +
+        '<div class="form-group"><label class="form-label">Featured Image</label>' +
+          '<div style="display:flex;gap:8px;align-items:flex-start">' +
+            '<input class="form-input" id="bp-image" data-testid="input-blog-image" value="' + (post ? (post.image_url || '').replace(/"/g,'&quot;') : '') + '" placeholder="Image URL" style="flex:1" />' +
+          '</div>' +
+          '<div id="bp-image-preview" style="margin-top:8px"></div>' +
+        '</div>' +
+        '<div class="form-group"><label class="form-label">Slug</label><input class="form-input" id="bp-slug" data-testid="input-blog-slug" value="' + (post ? (post.slug || '').replace(/"/g,'&quot;') : '') + '" placeholder="auto-generated-from-title" /></div>' +
+        '<div style="display:flex;gap:8px;margin-top:16px">' +
+          '<button class="btn btn-primary" id="bp-save" data-testid="button-save-post" data-id="' + (post ? post.id : '') + '">Save Post</button>' +
+          '<button class="btn btn-outline" onclick="this.closest(\'.modal-overlay\').remove()">Cancel</button>' +
+        '</div>' +
+      '</div>' +
+
+      '<div style="width:340px;background:#f8fafc;padding:20px;overflow-y:auto;flex-shrink:0">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">' +
+          '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93L12 22l-.75-12.07A4.001 4.001 0 0 1 12 2z"/><circle cx="12" cy="6" r="1.5"/></svg>' +
+          '<span style="font-weight:600;font-size:15px;color:#0A3D6B">AI Assistant</span>' +
+        '</div>' +
+
+        '<div class="form-group" style="margin-bottom:12px">' +
+          '<label class="form-label" style="font-size:12px">Topic / Prompt</label>' +
+          '<textarea class="form-textarea" id="ai-topic" data-testid="input-ai-topic" rows="2" placeholder="e.g. Marine piling techniques in the Gulf region" style="font-size:13px"></textarea>' +
+        '</div>' +
+
+        '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">' +
+          '<div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Generate Content</div>' +
+          '<button class="btn btn-sm" id="ai-titles" data-testid="button-ai-titles" style="background:#0ea5e9;color:#fff;justify-content:flex-start;font-size:12px">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h10M4 17h12"/></svg> Suggest Titles</button>' +
+          '<button class="btn btn-sm" id="ai-full" data-testid="button-ai-full" style="background:#0ea5e9;color:#fff;justify-content:flex-start;font-size:12px">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Write Full Post</button>' +
+          '<button class="btn btn-sm" id="ai-outline" data-testid="button-ai-outline" style="background:#0ea5e9;color:#fff;justify-content:flex-start;font-size:12px">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> Generate Outline</button>' +
+          '<button class="btn btn-sm" id="ai-excerpt" data-testid="button-ai-excerpt" style="background:#0ea5e9;color:#fff;justify-content:flex-start;font-size:12px">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Generate Excerpt</button>' +
+          '<button class="btn btn-sm" id="ai-seo" data-testid="button-ai-seo" style="background:#6366f1;color:#fff;justify-content:flex-start;font-size:12px">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> SEO Meta & Keywords</button>' +
+        '</div>' +
+
+        '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">' +
+          '<div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Translate & Improve</div>' +
+          '<button class="btn btn-sm" id="ai-translate-ar" data-testid="button-ai-translate-ar" style="background:#f59e0b;color:#fff;justify-content:flex-start;font-size:12px">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></svg> Translate to Arabic</button>' +
+          '<button class="btn btn-sm" id="ai-translate-en" data-testid="button-ai-translate-en" style="background:#f59e0b;color:#fff;justify-content:flex-start;font-size:12px">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></svg> Translate to English</button>' +
+          '<button class="btn btn-sm" id="ai-improve" data-testid="button-ai-improve" style="background:#10b981;color:#fff;justify-content:flex-start;font-size:12px">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> Improve Content</button>' +
+        '</div>' +
+
+        '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">' +
+          '<div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Image</div>' +
+          '<button class="btn btn-sm" id="ai-gen-image" data-testid="button-ai-gen-image" style="background:#8b5cf6;color:#fff;justify-content:flex-start;font-size:12px">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Generate Cover Image</button>' +
+        '</div>' +
+
+        '<div id="ai-output-wrap" style="display:none;margin-top:12px">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+            '<span style="font-size:12px;font-weight:600;color:#0A3D6B">AI Output</span>' +
+            '<div style="display:flex;gap:4px">' +
+              '<button class="btn btn-sm" id="ai-copy" data-testid="button-ai-copy" style="font-size:11px;padding:3px 8px;background:#e2e8f0;color:#334155">Copy</button>' +
+              '<button class="btn btn-sm" id="ai-use-title" data-testid="button-ai-use-title" style="font-size:11px;padding:3px 8px;background:#0ea5e9;color:#fff">Use as Title</button>' +
+              '<button class="btn btn-sm" id="ai-use-content" data-testid="button-ai-use-content" style="font-size:11px;padding:3px 8px;background:#0ea5e9;color:#fff">Use as Content</button>' +
+              '<button class="btn btn-sm" id="ai-use-excerpt" data-testid="button-ai-use-excerpt" style="font-size:11px;padding:3px 8px;background:#0ea5e9;color:#fff">Use as Excerpt</button>' +
+            '</div>' +
+          '</div>' +
+          '<textarea class="form-textarea" id="ai-output" data-testid="textarea-ai-output" rows="8" style="font-size:12px;background:#fff" readonly></textarea>' +
+        '</div>' +
+
+        '<div id="ai-loading" style="display:none;text-align:center;padding:20px;color:#64748b">' +
+          '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin" style="margin:0 auto 8px;display:block"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>' +
+          '<span style="font-size:13px" id="ai-loading-text">Generating...</span>' +
+        '</div>' +
       '</div>' +
     '</div>';
     document.body.appendChild(overlay);
+
+    var imgInput = document.getElementById('bp-image');
+    function updateImagePreview() {
+      var prev = document.getElementById('bp-image-preview');
+      if (imgInput.value) {
+        prev.innerHTML = '<img src="' + escapeHtml(imgInput.value) + '" style="max-width:100%;max-height:120px;border-radius:6px;border:1px solid #e2e8f0" />';
+      } else { prev.innerHTML = ''; }
+    }
+    imgInput.addEventListener('input', updateImagePreview);
+    updateImagePreview();
+
+    function showAiLoading(text) {
+      document.getElementById('ai-loading').style.display = 'block';
+      document.getElementById('ai-loading-text').textContent = text || 'Generating...';
+      document.getElementById('ai-output-wrap').style.display = 'none';
+    }
+    function showAiOutput(text) {
+      document.getElementById('ai-loading').style.display = 'none';
+      document.getElementById('ai-output-wrap').style.display = 'block';
+      document.getElementById('ai-output').value = text;
+    }
+    function showAiError(msg) {
+      document.getElementById('ai-loading').style.display = 'none';
+      showToast(msg, 'error');
+    }
+    function getTopic() {
+      var t = document.getElementById('ai-topic').value.trim();
+      if (!t) { var title = document.getElementById('bp-title').value.trim(); if (title) return title; }
+      return t;
+    }
+
+    document.getElementById('ai-titles').addEventListener('click', function() {
+      var topic = getTopic(); if (!topic) { showToast('Enter a topic first', 'error'); return; }
+      showAiLoading('Generating title ideas...');
+      aiBlogCall('title-ideas', topic, 'en').then(function(d) { d.success ? showAiOutput(d.content) : showAiError(d.error); }).catch(function() { showAiError('Failed to generate'); });
+    });
+    document.getElementById('ai-full').addEventListener('click', function() {
+      var topic = getTopic(); if (!topic) { showToast('Enter a topic first', 'error'); return; }
+      showAiLoading('Writing full blog post...');
+      aiBlogCall('full-post', topic, 'en').then(function(d) { d.success ? showAiOutput(d.content) : showAiError(d.error); }).catch(function() { showAiError('Failed to generate'); });
+    });
+    document.getElementById('ai-outline').addEventListener('click', function() {
+      var topic = getTopic(); if (!topic) { showToast('Enter a topic first', 'error'); return; }
+      showAiLoading('Generating outline...');
+      aiBlogCall('outline', topic, 'en').then(function(d) { d.success ? showAiOutput(d.content) : showAiError(d.error); }).catch(function() { showAiError('Failed to generate'); });
+    });
+    document.getElementById('ai-excerpt').addEventListener('click', function() {
+      var topic = getTopic(); if (!topic) { showToast('Enter a topic first', 'error'); return; }
+      showAiLoading('Generating excerpt...');
+      aiBlogCall('excerpt', topic, 'en').then(function(d) { d.success ? showAiOutput(d.content) : showAiError(d.error); }).catch(function() { showAiError('Failed to generate'); });
+    });
+    document.getElementById('ai-seo').addEventListener('click', function() {
+      var topic = getTopic(); if (!topic) { showToast('Enter a topic first', 'error'); return; }
+      showAiLoading('Generating SEO data...');
+      aiBlogCall('seo-meta', topic, 'en').then(function(d) { d.success ? showAiOutput(d.content) : showAiError(d.error); }).catch(function() { showAiError('Failed to generate'); });
+    });
+    document.getElementById('ai-translate-ar').addEventListener('click', function() {
+      var content = document.getElementById('bp-content').value.trim();
+      var title = document.getElementById('bp-title').value.trim();
+      var excerpt = document.getElementById('bp-excerpt').value.trim();
+      if (!content && !title) { showToast('Write English content first', 'error'); return; }
+      showAiLoading('Translating to Arabic...');
+      var fullText = (title ? 'TITLE: ' + title + '\n\n' : '') + (excerpt ? 'EXCERPT: ' + excerpt + '\n\n' : '') + (content ? 'CONTENT:\n' + content : '');
+      aiBlogCall('translate', '', 'ar', fullText).then(function(d) {
+        if (d.success) {
+          showAiOutput(d.content);
+          var parts = d.content;
+          var titleMatch = parts.match(/TITLE:\s*(.+)/i) || parts.match(/العنوان:\s*(.+)/i);
+          var excerptMatch = parts.match(/EXCERPT:\s*(.+)/i) || parts.match(/المقتطف:\s*(.+)/i);
+          var contentMatch = parts.match(/CONTENT:\s*([\s\S]+)/i) || parts.match(/المحتوى:\s*([\s\S]+)/i);
+          if (titleMatch) document.getElementById('bp-title-ar').value = titleMatch[1].trim();
+          if (excerptMatch) document.getElementById('bp-excerpt-ar').value = excerptMatch[1].trim();
+          if (contentMatch) document.getElementById('bp-content-ar').value = contentMatch[1].trim();
+          else if (!titleMatch && !excerptMatch) {
+            document.getElementById('bp-content-ar').value = d.content.trim();
+          }
+          showToast('Arabic fields filled', 'success');
+        } else { showAiError(d.error); }
+      }).catch(function() { showAiError('Translation failed'); });
+    });
+    document.getElementById('ai-translate-en').addEventListener('click', function() {
+      var content = document.getElementById('bp-content-ar').value.trim();
+      if (!content) { showToast('Write Arabic content first', 'error'); return; }
+      showAiLoading('Translating to English...');
+      aiBlogCall('translate', '', 'en', content).then(function(d) { d.success ? showAiOutput(d.content) : showAiError(d.error); }).catch(function() { showAiError('Translation failed'); });
+    });
+    document.getElementById('ai-improve').addEventListener('click', function() {
+      var content = document.getElementById('bp-content').value.trim();
+      if (!content) { showToast('Write content first to improve', 'error'); return; }
+      showAiLoading('Improving content...');
+      aiBlogCall('improve', '', 'en', content).then(function(d) { d.success ? showAiOutput(d.content) : showAiError(d.error); }).catch(function() { showAiError('Improvement failed'); });
+    });
+    document.getElementById('ai-gen-image').addEventListener('click', function() {
+      var topic = getTopic(); if (!topic) { showToast('Enter a topic first', 'error'); return; }
+      showAiLoading('Generating image prompt...');
+      aiBlogCall('image-prompt', topic, 'en').then(function(d) {
+        if (!d.success) { showAiError(d.error); return; }
+        var imgPrompt = d.content;
+        showAiLoading('Creating cover image with AI (this may take 30-60s)...');
+        fetch('/admin/api/ai-blog-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: imgPrompt })
+        }).then(function(r) { return r.json(); }).then(function(imgD) {
+          if (imgD.success) {
+            document.getElementById('bp-image').value = imgD.url;
+            updateImagePreview();
+            showAiOutput('Image generated!\n\nPrompt used:\n' + imgPrompt + '\n\nImage URL:\n' + imgD.url);
+            showToast('Cover image generated', 'success');
+          } else { showAiError(imgD.error || 'Image generation failed'); }
+        }).catch(function() { showAiError('Image generation failed'); });
+      }).catch(function() { showAiError('Failed to generate image prompt'); });
+    });
+
+    document.getElementById('ai-copy').addEventListener('click', function() {
+      var out = document.getElementById('ai-output');
+      navigator.clipboard.writeText(out.value).then(function() { showToast('Copied to clipboard', 'success'); });
+    });
+    document.getElementById('ai-use-title').addEventListener('click', function() {
+      var out = document.getElementById('ai-output').value.trim();
+      var firstLine = out.split('\n')[0].replace(/^\d+[\.\)]\s*/, '').replace(/^#+\s*/, '').replace(/^\*+/, '').replace(/\*+$/, '').trim();
+      document.getElementById('bp-title').value = firstLine;
+      showToast('Title set', 'success');
+    });
+    document.getElementById('ai-use-content').addEventListener('click', function() {
+      document.getElementById('bp-content').value = document.getElementById('ai-output').value.trim();
+      showToast('Content set', 'success');
+    });
+    document.getElementById('ai-use-excerpt').addEventListener('click', function() {
+      document.getElementById('bp-excerpt').value = document.getElementById('ai-output').value.trim();
+      showToast('Excerpt set', 'success');
+    });
+
     document.getElementById('bp-save').addEventListener('click', function() {
       var id = this.getAttribute('data-id');
       var body = {

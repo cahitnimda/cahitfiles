@@ -1,12 +1,12 @@
 <?php get_header(); ?>
 
 <section class="hero-banner" data-testid="section-blog-hero">
-  <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/pdSXKYWQJmOrlgEf.png" alt="<?php esc_attr_e('Blog', 'cahit-theme'); ?>" class="hero-banner-bg" />
+  <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/pdSXKYWQJmOrlgEf.png" alt="<?php esc_attr_e('Blog', 'cahit-theme'); ?>" class="hero-banner-bg" data-field="blog-hero-bg" />
   <div class="hero-banner-overlay"></div>
   <div class="hero-banner-content">
     <div class="container">
-      <h1 class="hero-banner-title hero-banner-title-lg" data-testid="text-blog-heading" data-ar="المدونة"><?php esc_html_e('Blog', 'cahit-theme'); ?></h1>
-      <p class="hero-banner-subtitle hero-banner-subtitle-lg" data-ar="رؤى وأخبار وتحديثات من فريق كاهيت للتجارة والمقاولات."><?php esc_html_e('Insights, news, and updates from the Cahit Trading & Contracting team.', 'cahit-theme'); ?></p>
+      <h1 class="hero-banner-title hero-banner-title-lg" data-testid="text-blog-heading" data-ar="المدونة" data-field="blog-hero-title"><?php esc_html_e('Blog', 'cahit-theme'); ?></h1>
+      <p class="hero-banner-subtitle hero-banner-subtitle-lg" data-ar="رؤى وأخبار وتحديثات من فريق كاهيت للتجارة والمقاولات." data-field="blog-hero-subtitle"><?php esc_html_e('Insights, news, and updates from the Cahit Trading & Contracting team.', 'cahit-theme'); ?></p>
     </div>
   </div>
 </section>
@@ -14,8 +14,8 @@
 <section class="section bg-white" data-testid="section-blog-posts">
   <div class="container">
     <div class="section-header">
-      <h2 class="section-title" data-ar="أحدث المقالات"><?php esc_html_e('Latest Posts', 'cahit-theme'); ?></h2>
-      <p class="section-subtitle" data-ar="ابقَ على اطلاع بأحدث مشاريعنا ورؤى الصناعة وأخبار الشركة."><?php esc_html_e('Stay up to date with our latest projects, industry insights, and company news.', 'cahit-theme'); ?></p>
+      <h2 class="section-title" data-ar="أحدث المقالات" data-field="blog-section-title"><?php esc_html_e('Latest Posts', 'cahit-theme'); ?></h2>
+      <p class="section-subtitle" data-ar="ابقَ على اطلاع بأحدث مشاريعنا ورؤى الصناعة وأخبار الشركة." data-field="blog-section-subtitle"><?php esc_html_e('Stay up to date with our latest projects, industry insights, and company news.', 'cahit-theme'); ?></p>
     </div>
 
     <?php

@@ -1,0 +1,103 @@
+TabiAI (タビアイ) — AI Tourism Concierge SaaS for Japan
+TabiAI is a production-grade, AI-powered tourism concierge platform designed for visitors to Japan. It combines cultural authenticity with cutting-edge technology — AR guides, VR 360° experiences, AI chat assistance, and booking management — all wrapped in a Japanese-first "Omotenashi" (hospitality) design aesthetic.
+
+Core Features
+1. Home Page
+
+Hero section with search functionality
+Category browsing (Food, Shopping, Culture, Nature)
+Featured tourist spots with ratings and crowd levels
+AR/VR promotional sections
+"Why TabiAI" value proposition
+Partner showcase and call-to-action sections
+2. Explore
+
+Browse tourist locations across Japan with filtering by category and search
+Each spot shows name (Japanese/English), description, rating, crowd level, and address
+Category filter dropdown with full JP/EN translation support
+3. AI Chat Concierge
+
+Real-time streaming AI responses via Server-Sent Events (SSE)
+Powered by GPT-5.2 through OpenAI integration
+Cultural tourism expertise — recommends spots, explains customs, suggests itineraries
+Voice input support (Japanese and English speech recognition)
+Conversation history persistence
+Requires authentication
+4. AR Guide System
+
+Walking route navigation with waypoints, duration, and distance
+Live camera AR overlay showing nearby landmarks
+Cultural etiquette information for each landmark (JP/EN)
+Nearby landmark discovery based on location
+AR session tracking for analytics
+5. VR 360° Experiences
+
+Gallery of virtual experiences across Japan (Fuji, Kyoto Arashiyama, Nara, Akihabara, Tea Ceremony, Kinkaku-ji)
+Three-tier viewing system:
+Primary: Three.js interactive panorama with click-and-drag navigation
+YouTube 360° video player (opens in dedicated popup window for full WebGL support)
+CSS panorama fallback if WebGL unavailable
+Interactive hotspots within panoramas with cultural info
+Fullscreen mode support
+Premium/free tier content separation
+6. Booking Management
+
+Create bookings with date selection, guest count, and price breakdown
+View and manage existing bookings
+Status tracking (confirmed, pending, cancelled)
+Commission tracking for B2B partners
+Requires authentication
+7. Analytics Dashboard
+
+Key stats overview (total spots, bookings, users)
+AR/VR usage metrics and session tracking
+Language split analytics (JP vs EN usage)
+Conversion rate monitoring
+Category distribution charts
+8. Pricing
+
+4-tier subscription model:
+Free — Basic access
+Premium — Full AI chat, premium VR content
+City Pass — Location-based bundled access
+B2B Enterprise — Business dashboard, API access, custom branding
+9. B2B Business Dashboard
+
+Tabbed interface for Hotels, Tours, and Municipality partners
+XR (AR/VR) content management
+Business profile and partner management
+Role-based access control
+Requires authentication
+Technical Architecture
+Stack:
+
+Frontend: React + Vite + TypeScript + Tailwind CSS + shadcn/ui
+Backend: Express 5 (Node.js)
+Database: PostgreSQL + Drizzle ORM
+AI: OpenAI GPT-5.2 via Replit AI Integrations
+Auth: Clerk (with proxy support)
+Monorepo: pnpm workspaces with TypeScript composite projects
+API: OpenAPI 3.1 spec with Orval-generated React Query hooks and Zod schemas
+3D: Three.js for WebGL panorama rendering
+Database (13 tables):
+
+locations, bookings, conversations, messages, users, commissions, ar_overlays, ar_routes, vr_experiences, vr_hotspots, businesses, business_users, subscriptions
+API: 25+ REST endpoints covering locations, bookings, analytics, AI chat, AR, VR, business, auth, and GDPR compliance
+
+Design System
+Colors: Deep Navy (#1A2A44), White, Light Gray (#F5F6F8), Crimson (#C8102E), Gold (#C9A646)
+Font: Noto Sans JP
+Border radius: 12px
+Aesthetic: Japanese-first "Omotenashi" hospitality design — clean, respectful, elegant
+No emojis in the UI
+Security & Compliance
+Helmet security headers
+Rate limiting (60 req/min API, 10 req/min AI)
+CORS with credentials
+Clerk authentication with protected routes
+GDPR compliance: data export and account deletion endpoints
+Internationalization
+Full JP/EN language toggle with localStorage persistence
+Japanese is the default locale
+All UI text, categories, and labels translate between languages
+Voice input supports both Japanese and English speech recognition

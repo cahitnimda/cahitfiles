@@ -1,0 +1,68 @@
+KomuIn AI — AI-Powered Municipal Government Operations Platform
+KomuIn AI is a web-based platform designed for Japanese municipal government offices to streamline daily operations using AI assistance. It supports three user roles — Admin, Staff, and Citizen — each with tailored access and functionality. The entire interface is in Japanese by default, with a one-click toggle to switch to full English.
+
+Authentication & Roles (RBAC)
+Login/Register system with email and password
+Three roles with different access levels:
+Admin — Full access to everything including user management
+Staff — Access to dashboard, inquiry management, document management, and AI chat
+Citizen — Access to a dedicated citizen portal to submit inquiries and view documents
+Demo accounts: admin@komuin.jp, staff@komuin.jp, citizen@komuin.jp (all use password123)
+Dashboard (Admin & Staff)
+Statistics overview — Total inquiries, open inquiries, documents created, AI interactions, total users
+Recent Activity feed — Shows the latest inquiries and documents across the system
+Click any activity to view details in a popup dialog
+Hover to reveal a delete button
+"Go to Details" button navigates to the full management page
+AI Assistant quick-start card — Suggested prompts and a button to jump to AI Chat
+Inquiry Management (Admin & Staff)
+Grid view of all citizen inquiries with search, status filter, and category filter
+Each inquiry card shows title, content preview, category badge, status badge, and sender info
+Click any inquiry to open a detail dialog showing:
+Full inquiry content and sender information
+Status dropdown to change status (Open, In Progress, Resolved, Closed)
+AI Draft Response area:
+Click "Generate AI Draft" to have AI automatically write a response based on the inquiry's context (category, title, content)
+AI responses stream in real-time (Server-Sent Events)
+Edit the draft manually before saving
+"Clear" button to reset the draft
+"Save & Send Response" saves the response and auto-clears the field
+Categories: General, Tax, Welfare, Housing, Education, Health, Registration, Other
+Document Management (Admin & Staff)
+Grid view of all documents with type filter (Application, Certificate, Report, Notice)
+Each document card shows name, type badge, creator, date, and content preview
+Click any document to open an editing dialog:
+Editable document name and content
+AI document generation — describe what you need, pick a type, and AI generates the full document
+Save changes or delete the document
+Create new documents with AI assistance or manual entry
+AI Chat Assistant (Admin & Staff)
+Full conversational AI assistant for work-related questions
+Real-time streaming responses (SSE)
+Message actions on hover: Copy text, Save as .txt file, Delete message
+Supports Japanese and English conversations
+Powered by OpenAI integration (no API key needed)
+Citizen Portal (Citizen role)
+Welcome banner with personalized greeting
+Inquiries tab:
+View all personal inquiries with status tracking
+Submit new inquiries with category selection
+See AI-generated responses from staff
+Documents tab:
+View documents shared with the citizen (notices, personal documents)
+Admin Panel (Admin only)
+User management — View all registered users with their roles, departments, and status
+Manage user accounts across the system
+Language Support
+Default language: Japanese
+Toggle to English via the globe icon (top-right on login, sidebar footer when logged in)
+All UI labels, buttons, menus, status badges, category names, and even database content (inquiry titles, document names, user names) translate fully
+Tech Stack
+Layer	Technology
+Frontend	React + Vite + TypeScript + Tailwind CSS
+UI Components	shadcn/ui (Radix primitives)
+Backend	Node.js + Express
+Database	PostgreSQL with Drizzle ORM
+AI	OpenAI via Replit integration (streaming SSE)
+API	OpenAPI spec with generated TypeScript client
+State Management	TanStack React Query

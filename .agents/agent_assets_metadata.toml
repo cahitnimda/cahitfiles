@@ -18,3 +18,15 @@ id = "jctiCtCs8cKAKJgEhsU5j"
 uri = "file://cahit-theme-latest.zip"
 type = "unspecified"
 title = "Cahit Theme - Latest Updated Files"
+
+[[outputs]]
+id = "WEJZirpTiOghFnFC72LeN"
+uri = "file://crm-specs/KOMUIN-CRM-SPEC.md"
+type = "text"
+title = "KomuIn AI — CRM Admin Dashboard Spec"
+
+[[outputs]]
+id = "keHSQrYgljUPZN5pAlJNm"
+uri = "file://crm-specs/TABIAI-CRM-SPEC.md"
+type = "text"
+title = "TabiAI — CRM Admin Dashboard Spec"

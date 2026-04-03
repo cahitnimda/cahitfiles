@@ -888,6 +888,7 @@ app.get('/admin/login', (req, res) => {
     ? path.join(ADMIN_DIR, 'login.php')
     : path.join(ADMIN_DIR, 'login.html');
   let content = fs.readFileSync(loginFile, 'utf8');
+  content = content.replace(/<\?php\s+echo\s+defined\('ABSPATH'\)\s*\?\s*esc_url\(home_url\('\/'\)\)\s*:\s*'\/'\s*;\s*\?>/g, '/');
   content = content.replace(/<\?php[\s\S]*?\?>/g, '');
   res.send(content);
 });

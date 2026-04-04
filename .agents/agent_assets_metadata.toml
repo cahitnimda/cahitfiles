@@ -30,3 +30,9 @@ id = "keHSQrYgljUPZN5pAlJNm"
 uri = "file://crm-specs/TABIAI-CRM-SPEC.md"
 type = "text"
 title = "TabiAI — CRM Admin Dashboard Spec"
+
+[[outputs]]
+id = "hSrIdCTgIPRw0YOIQk_rV"
+uri = "file://cahit-crm-full-code.tar.gz"
+type = "unspecified"
+title = "Cahit CRM - Full Code (tar.gz)"

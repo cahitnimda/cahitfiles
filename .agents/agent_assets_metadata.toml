@@ -36,3 +36,9 @@ id = "hSrIdCTgIPRw0YOIQk_rV"
 uri = "file://cahit-crm-full-code.tar.gz"
 type = "unspecified"
 title = "Cahit CRM - Full Code (tar.gz)"
+
+[[outputs]]
+id = "YooIItdEBp-OdC89aa9-o"
+uri = "file://CAHIT-ADMIN-GUIDE.md"
+type = "text"
+title = "Cahit Admin Dashboard - Complete Guide"

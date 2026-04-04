@@ -68,6 +68,18 @@
   </div>
 </footer>
 
+<script>
+(function(){
+  var sid = sessionStorage.getItem('_csid');
+  if (!sid) { sid = 'sid_' + Math.random().toString(36).substr(2,12) + '_' + Date.now(); sessionStorage.setItem('_csid', sid); }
+  try {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/track', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.send(JSON.stringify({ page: window.location.pathname, referrer: document.referrer || '', sid: sid }));
+  } catch(e) {}
+})();
+</script>
 <?php wp_footer(); ?>
 </body>
 </html>

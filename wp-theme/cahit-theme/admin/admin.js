@@ -155,7 +155,7 @@
       case 'media': content.innerHTML = renderMedia(); bindMediaActions(); break;
       case 'blog': content.innerHTML = renderBlogManager(); loadBlogPosts(); break;
       case 'leads': content.innerHTML = renderLeads(); break;
-      case 'analytics': content.innerHTML = renderAnalytics(); break;
+      case 'analytics': content.innerHTML = renderAnalytics(); loadAnalyticsData(); bindAnalyticsActions(); break;
       case 'chatbot': content.innerHTML = renderChatbotKnowledge(); bindChatbotActions(); break;
       case 'settings': content.innerHTML = renderSettings(); bindSettingsActions(); break;
     }
@@ -1764,56 +1764,134 @@
   }
 
   function renderAnalytics() {
-    var barData = [45, 72, 58, 90, 65, 82, 55, 93, 70, 48, 85, 60];
-    var bars = '';
-    var maxVal = Math.max.apply(null, barData);
-    barData.forEach(function(v) {
-      bars += '<div class="chart-bar" style="height:' + Math.round((v / maxVal) * 160) + 'px" title="' + v + ' visits"></div>';
-    });
-
     return '' +
-      '<div class="stats-row">' +
-        '<div class="stat-card"><div class="stat-card-header"><span class="stat-card-label">Page Views</span></div><div class="stat-card-value">2,847</div><div class="stat-card-change">+12.5% vs last month</div></div>' +
-        '<div class="stat-card"><div class="stat-card-header"><span class="stat-card-label">Unique Visitors</span></div><div class="stat-card-value">1,234</div><div class="stat-card-change">+8.3% vs last month</div></div>' +
-        '<div class="stat-card"><div class="stat-card-header"><span class="stat-card-label">Avg. Session</span></div><div class="stat-card-value">3:42</div><div class="stat-card-change">+0:23 vs last month</div></div>' +
-        '<div class="stat-card"><div class="stat-card-header"><span class="stat-card-label">Bounce Rate</span></div><div class="stat-card-value">34.2%</div><div class="stat-card-change down">+2.1% vs last month</div></div>' +
+      '<div class="toolbar">' +
+        '<h2 style="margin:0;font-weight:600;font-size:1rem;color:#0A3D6B">Analytics</h2>' +
+        '<div class="toolbar-spacer"></div>' +
+        '<button class="btn btn-outline" id="refreshAnalyticsBtn" data-testid="btn-refresh-analytics"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh</button>' +
       '</div>' +
-      '<div class="analytics-grid">' +
-        '<div class="card">' +
-          '<div class="card-header"><span class="card-title">Monthly Traffic</span></div>' +
-          '<div class="card-body"><div class="chart-placeholder">' + bars + '</div></div>' +
+      '<div id="analytics-content" style="padding:24px">' +
+        '<div style="text-align:center;padding:60px"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><p style="margin-top:12px;color:#64748b">Loading analytics data...</p></div>' +
+      '</div>';
+  }
+
+  function loadAnalyticsData() {
+    fetch('/admin/api/analytics').then(function(r) { return r.json(); }).then(function(result) {
+      if (!result.success || !result.data) {
+        document.getElementById('analytics-content').innerHTML = '<div style="text-align:center;padding:60px;color:#64748b"><p>Unable to load analytics data.</p></div>';
+        return;
+      }
+      var d = result.data;
+      var viewsChange = d.lastMonthViews > 0 ? Math.round(((d.thisMonthViews - d.lastMonthViews) / d.lastMonthViews) * 100) : (d.thisMonthViews > 0 ? 100 : 0);
+      var visitorsChange = d.uniqueLastMonth > 0 ? Math.round(((d.uniqueThisMonth - d.uniqueLastMonth) / d.uniqueLastMonth) * 100) : (d.uniqueThisMonth > 0 ? 100 : 0);
+      var viewsDir = viewsChange >= 0 ? '+' : '';
+      var visitorsDir = visitorsChange >= 0 ? '+' : '';
+
+      var dailyBars = '';
+      var dailyLabels = '';
+      if (d.dailyData && d.dailyData.length > 0) {
+        var maxDaily = Math.max.apply(null, d.dailyData.map(function(x) { return parseInt(x.views); }));
+        if (maxDaily === 0) maxDaily = 1;
+        d.dailyData.forEach(function(day) {
+          var v = parseInt(day.views);
+          var dateStr = new Date(day.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          dailyBars += '<div class="chart-bar" style="height:' + Math.max(4, Math.round((v / maxDaily) * 160)) + 'px" title="' + dateStr + ': ' + v + ' views"></div>';
+        });
+      } else {
+        dailyBars = '<div style="height:160px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:13px">No page view data yet. Tracking starts now.</div>';
+      }
+
+      var topPagesHtml = '';
+      if (d.topPages && d.topPages.length > 0) {
+        d.topPages.forEach(function(p) {
+          topPagesHtml += '<tr><td>' + p.page + '</td><td>' + parseInt(p.views).toLocaleString() + '</td></tr>';
+        });
+      } else {
+        topPagesHtml = '<tr><td colspan="2" style="text-align:center;color:#94a3b8">No data yet</td></tr>';
+      }
+
+      var referrerHtml = '';
+      var totalRefVisitors = 0;
+      if (d.referrers) d.referrers.forEach(function(r) { totalRefVisitors += parseInt(r.visitors); });
+      if (d.referrers && d.referrers.length > 0) {
+        d.referrers.forEach(function(r) {
+          var pct = totalRefVisitors > 0 ? ((parseInt(r.visitors) / totalRefVisitors) * 100).toFixed(1) : '0';
+          var badgeClass = r.source === 'Direct' ? 'badge-blue' : (r.source === 'Google Search' ? 'badge-green' : 'badge-orange');
+          referrerHtml += '<tr><td>' + r.source + '</td><td>' + parseInt(r.visitors).toLocaleString() + '</td><td><span class="badge ' + badgeClass + '">' + pct + '%</span></td></tr>';
+        });
+      } else {
+        referrerHtml = '<tr><td colspan="3" style="text-align:center;color:#94a3b8">No data yet</td></tr>';
+      }
+
+      var recentHtml = '';
+      if (d.recentViews && d.recentViews.length > 0) {
+        d.recentViews.slice(0, 10).forEach(function(v) {
+          var timeAgo = getTimeAgo(new Date(v.created_at));
+          recentHtml += '<tr><td>' + v.page + '</td><td>' + timeAgo + '</td><td style="font-size:11px;color:#94a3b8">' + (v.referrer ? v.referrer.substring(0, 40) : 'Direct') + '</td></tr>';
+        });
+      } else {
+        recentHtml = '<tr><td colspan="3" style="text-align:center;color:#94a3b8">No recent visits</td></tr>';
+      }
+
+      document.getElementById('analytics-content').innerHTML = '' +
+        '<div class="stats-row">' +
+          '<div class="stat-card" data-testid="stat-total-views"><div class="stat-card-header"><span class="stat-card-label">Total Page Views</span></div><div class="stat-card-value">' + d.totalViews.toLocaleString() + '</div><div class="stat-card-change">' + d.thisMonthViews.toLocaleString() + ' this month</div></div>' +
+          '<div class="stat-card" data-testid="stat-unique-visitors"><div class="stat-card-header"><span class="stat-card-label">Unique Visitors</span></div><div class="stat-card-value">' + d.uniqueVisitors.toLocaleString() + '</div><div class="stat-card-change">' + d.uniqueThisMonth.toLocaleString() + ' this month</div></div>' +
+          '<div class="stat-card" data-testid="stat-today-views"><div class="stat-card-header"><span class="stat-card-label">Today\'s Views</span></div><div class="stat-card-value">' + d.todayViews.toLocaleString() + '</div><div class="stat-card-change">' + d.yesterdayViews.toLocaleString() + ' yesterday</div></div>' +
+          '<div class="stat-card" data-testid="stat-month-change"><div class="stat-card-header"><span class="stat-card-label">Month vs Last</span></div><div class="stat-card-value">' + viewsDir + viewsChange + '%</div><div class="stat-card-change' + (viewsChange < 0 ? ' down' : '') + '">' + d.thisMonthViews.toLocaleString() + ' vs ' + d.lastMonthViews.toLocaleString() + '</div></div>' +
         '</div>' +
-        '<div class="card">' +
-          '<div class="card-header"><span class="card-title">Top Pages</span></div>' +
-          '<div class="card-body-np">' +
-            '<table class="table">' +
-              '<thead><tr><th>Page</th><th>Views</th><th>Avg. Time</th></tr></thead>' +
-              '<tbody>' +
-                '<tr><td>/</td><td>1,245</td><td>2:30</td></tr>' +
-                '<tr><td>/services</td><td>456</td><td>3:15</td></tr>' +
-                '<tr><td>/projects</td><td>389</td><td>4:02</td></tr>' +
-                '<tr><td>/about</td><td>312</td><td>2:45</td></tr>' +
-                '<tr><td>/clients</td><td>234</td><td>1:58</td></tr>' +
-                '<tr><td>/careers</td><td>211</td><td>3:30</td></tr>' +
-              '</tbody>' +
-            '</table>' +
+        '<div class="analytics-grid">' +
+          '<div class="card">' +
+            '<div class="card-header"><span class="card-title">Daily Views (Last 30 Days)</span></div>' +
+            '<div class="card-body"><div class="chart-placeholder">' + dailyBars + '</div></div>' +
+          '</div>' +
+          '<div class="card">' +
+            '<div class="card-header"><span class="card-title">Top Pages</span></div>' +
+            '<div class="card-body-np">' +
+              '<table class="table"><thead><tr><th>Page</th><th>Views</th></tr></thead><tbody>' + topPagesHtml + '</tbody></table>' +
+            '</div>' +
           '</div>' +
         '</div>' +
-      '</div>' +
-      '<div class="card">' +
-        '<div class="card-header"><span class="card-title">Traffic Sources</span></div>' +
-        '<div class="card-body-np">' +
-          '<table class="table">' +
-            '<thead><tr><th>Source</th><th>Visitors</th><th>Conversion</th></tr></thead>' +
-            '<tbody>' +
-              '<tr><td>Direct</td><td>523</td><td><span class="badge badge-green">4.2%</span></td></tr>' +
-              '<tr><td>Google Search</td><td>412</td><td><span class="badge badge-green">3.8%</span></td></tr>' +
-              '<tr><td>LinkedIn</td><td>178</td><td><span class="badge badge-blue">2.1%</span></td></tr>' +
-              '<tr><td>Referral</td><td>121</td><td><span class="badge badge-orange">1.5%</span></td></tr>' +
-            '</tbody>' +
-          '</table>' +
-        '</div>' +
-      '</div>';
+        '<div class="analytics-grid">' +
+          '<div class="card">' +
+            '<div class="card-header"><span class="card-title">Traffic Sources</span></div>' +
+            '<div class="card-body-np">' +
+              '<table class="table"><thead><tr><th>Source</th><th>Visitors</th><th>Share</th></tr></thead><tbody>' + referrerHtml + '</tbody></table>' +
+            '</div>' +
+          '</div>' +
+          '<div class="card">' +
+            '<div class="card-header"><span class="card-title">Recent Visits</span></div>' +
+            '<div class="card-body-np">' +
+              '<table class="table"><thead><tr><th>Page</th><th>When</th><th>Source</th></tr></thead><tbody>' + recentHtml + '</tbody></table>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+    }).catch(function(e) {
+      var el = document.getElementById('analytics-content');
+      if (el) el.innerHTML = '<div style="text-align:center;padding:60px;color:#64748b"><p>Error loading analytics. Please try again.</p></div>';
+    });
+  }
+
+  function getTimeAgo(date) {
+    var seconds = Math.floor((new Date() - date) / 1000);
+    if (seconds < 60) return 'Just now';
+    var minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return minutes + 'm ago';
+    var hours = Math.floor(minutes / 60);
+    if (hours < 24) return hours + 'h ago';
+    var days = Math.floor(hours / 24);
+    if (days < 30) return days + 'd ago';
+    return date.toLocaleDateString();
+  }
+
+  function bindAnalyticsActions() {
+    var btn = document.getElementById('refreshAnalyticsBtn');
+    if (btn) {
+      btn.addEventListener('click', function() {
+        document.getElementById('analytics-content').innerHTML = '<div style="text-align:center;padding:60px"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><p style="margin-top:12px;color:#64748b">Refreshing...</p></div>';
+        loadAnalyticsData();
+      });
+    }
   }
 
   function renderChatbotKnowledge() {

@@ -435,6 +435,83 @@ async function sendLeadEmail(lead) {
   }
 }
 
+app.post('/api/track', express.json(), async (req, res) => {
+  try {
+    if (!dbPool) return res.json({ ok: true });
+    const page = (req.body.page || req.path || '/').substring(0, 500);
+    const referrer = (req.body.referrer || req.headers.referer || '').substring(0, 1000);
+    const ua = (req.headers['user-agent'] || '').substring(0, 500);
+    const sessionId = (req.body.sid || '').substring(0, 100);
+    const ip = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || '').split(',')[0].trim().substring(0, 100);
+    await dbQuery('INSERT INTO page_views (page, referrer, user_agent, session_id, ip) VALUES ($1, $2, $3, $4, $5)', [page, referrer, ua, sessionId, ip]);
+    res.json({ ok: true });
+  } catch (e) { res.json({ ok: true }); }
+});
+
+app.get('/admin/api/analytics', async (req, res) => {
+  try {
+    if (!dbPool) return res.json({ success: true, data: {} });
+
+    const totalR = await dbQuery("SELECT COUNT(*) as cnt FROM page_views");
+    const totalViews = totalR && totalR.rows.length ? parseInt(totalR.rows[0].cnt) : 0;
+
+    const uniqueR = await dbQuery("SELECT COUNT(DISTINCT session_id) as cnt FROM page_views WHERE session_id != ''");
+    const uniqueVisitors = uniqueR && uniqueR.rows.length ? parseInt(uniqueR.rows[0].cnt) : 0;
+
+    const todayR = await dbQuery("SELECT COUNT(*) as cnt FROM page_views WHERE created_at >= CURRENT_DATE");
+    const todayViews = todayR && todayR.rows.length ? parseInt(todayR.rows[0].cnt) : 0;
+
+    const yesterdayR = await dbQuery("SELECT COUNT(*) as cnt FROM page_views WHERE created_at >= CURRENT_DATE - INTERVAL '1 day' AND created_at < CURRENT_DATE");
+    const yesterdayViews = yesterdayR && yesterdayR.rows.length ? parseInt(yesterdayR.rows[0].cnt) : 0;
+
+    const thisMonthR = await dbQuery("SELECT COUNT(*) as cnt FROM page_views WHERE created_at >= date_trunc('month', CURRENT_DATE)");
+    const thisMonthViews = thisMonthR && thisMonthR.rows.length ? parseInt(thisMonthR.rows[0].cnt) : 0;
+
+    const lastMonthR = await dbQuery("SELECT COUNT(*) as cnt FROM page_views WHERE created_at >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND created_at < date_trunc('month', CURRENT_DATE)");
+    const lastMonthViews = lastMonthR && lastMonthR.rows.length ? parseInt(lastMonthR.rows[0].cnt) : 0;
+
+    const uniqueThisMonthR = await dbQuery("SELECT COUNT(DISTINCT session_id) as cnt FROM page_views WHERE session_id != '' AND created_at >= date_trunc('month', CURRENT_DATE)");
+    const uniqueThisMonth = uniqueThisMonthR && uniqueThisMonthR.rows.length ? parseInt(uniqueThisMonthR.rows[0].cnt) : 0;
+
+    const uniqueLastMonthR = await dbQuery("SELECT COUNT(DISTINCT session_id) as cnt FROM page_views WHERE session_id != '' AND created_at >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND created_at < date_trunc('month', CURRENT_DATE)");
+    const uniqueLastMonth = uniqueLastMonthR && uniqueLastMonthR.rows.length ? parseInt(uniqueLastMonthR.rows[0].cnt) : 0;
+
+    const topPagesR = await dbQuery("SELECT page, COUNT(*) as views FROM page_views GROUP BY page ORDER BY views DESC LIMIT 10");
+    const topPages = topPagesR && topPagesR.rows ? topPagesR.rows : [];
+
+    const dailyR = await dbQuery("SELECT date_trunc('day', created_at)::date as day, COUNT(*) as views FROM page_views WHERE created_at >= CURRENT_DATE - INTERVAL '30 days' GROUP BY day ORDER BY day");
+    const dailyData = dailyR && dailyR.rows ? dailyR.rows : [];
+
+    const monthlyR = await dbQuery("SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') as month, COUNT(*) as views FROM page_views WHERE created_at >= CURRENT_DATE - INTERVAL '12 months' GROUP BY month ORDER BY month");
+    const monthlyData = monthlyR && monthlyR.rows ? monthlyR.rows : [];
+
+    const referrerR = await dbQuery("SELECT CASE WHEN referrer = '' OR referrer IS NULL THEN 'Direct' WHEN referrer LIKE '%google%' THEN 'Google Search' WHEN referrer LIKE '%linkedin%' THEN 'LinkedIn' WHEN referrer LIKE '%facebook%' THEN 'Facebook' WHEN referrer LIKE '%twitter%' OR referrer LIKE '%x.com%' THEN 'X / Twitter' WHEN referrer LIKE '%instagram%' THEN 'Instagram' ELSE 'Other Referral' END as source, COUNT(*) as visitors FROM page_views GROUP BY source ORDER BY visitors DESC LIMIT 10");
+    const referrers = referrerR && referrerR.rows ? referrerR.rows : [];
+
+    const recentR = await dbQuery("SELECT page, created_at, referrer, ip FROM page_views ORDER BY created_at DESC LIMIT 20");
+    const recentViews = recentR && recentR.rows ? recentR.rows : [];
+
+    res.json({
+      success: true,
+      data: {
+        totalViews,
+        uniqueVisitors,
+        todayViews,
+        yesterdayViews,
+        thisMonthViews,
+        lastMonthViews,
+        uniqueThisMonth,
+        uniqueLastMonth,
+        topPages,
+        dailyData,
+        monthlyData,
+        referrers,
+        recentViews
+      }
+    });
+  } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
 app.post('/api/ajax', async (req, res) => {
   const fields = await parseMultipart(req);
   const action = fields.action || (req.body && req.body.action) || '';
@@ -1535,6 +1612,9 @@ async function initDatabase() {
     await dbQuery(`CREATE TABLE IF NOT EXISTS chatbot_knowledge (id SERIAL PRIMARY KEY, title VARCHAR(500) NOT NULL DEFAULT '', content TEXT NOT NULL DEFAULT '', sort_order INT DEFAULT 0, created_at TIMESTAMP DEFAULT NOW())`);
     await dbQuery(`CREATE TABLE IF NOT EXISTS leads (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL DEFAULT '', email VARCHAR(255) NOT NULL DEFAULT '', phone VARCHAR(100) DEFAULT '', service_type VARCHAR(255) DEFAULT '', details TEXT DEFAULT '', status VARCHAR(50) DEFAULT 'new', created_at TIMESTAMP DEFAULT NOW())`);
     await dbQuery(`CREATE TABLE IF NOT EXISTS blog_posts (id SERIAL PRIMARY KEY, title VARCHAR(500) NOT NULL DEFAULT '', title_ar VARCHAR(500) DEFAULT '', excerpt TEXT DEFAULT '', excerpt_ar TEXT DEFAULT '', content TEXT DEFAULT '', content_ar TEXT DEFAULT '', slug VARCHAR(255) UNIQUE, image_url TEXT DEFAULT '', status VARCHAR(50) DEFAULT 'published', created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW())`);
+    await dbQuery(`CREATE TABLE IF NOT EXISTS page_views (id SERIAL PRIMARY KEY, page VARCHAR(500) NOT NULL, referrer VARCHAR(1000) DEFAULT '', user_agent TEXT DEFAULT '', session_id VARCHAR(100) DEFAULT '', ip VARCHAR(100) DEFAULT '', created_at TIMESTAMP DEFAULT NOW())`);
+    await dbQuery(`CREATE INDEX IF NOT EXISTS idx_page_views_created ON page_views(created_at)`);
+    await dbQuery(`CREATE INDEX IF NOT EXISTS idx_page_views_page ON page_views(page)`);
     console.log('Database tables initialized');
   } catch (e) { console.error('DB init error:', e.message); }
 }

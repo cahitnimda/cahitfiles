@@ -1255,6 +1255,192 @@ app.get('/blog/:slug', async (req, res) => {
   }
 });
 
+app.get('/projects/:slug', async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    const headerContent = readThemeFile('header.php');
+    const footerContent = readThemeFile('footer.php');
+    let header = executePhpTemplate(headerContent, 'projects');
+    let footer = executePhpTemplate(footerContent, 'projects');
+    header = await applySavedContent(header, ['header']);
+    footer = await applySavedContent(footer, ['footer']);
+
+    let title = slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    let subtitle = '';
+    let heroImg = '';
+    let location = '';
+    let category = '';
+    let client = '';
+    let year = '';
+    let content = '';
+    let scope = '';
+    let img2 = '';
+    let img3 = '';
+
+    if (dbPool) {
+      const r = await dbQuery('SELECT value FROM site_settings WHERE key=$1', ['content_project-detail-' + slug]);
+      if (r && r.rows.length > 0) {
+        const data = JSON.parse(r.rows[0].value);
+        title = data['project-detail-title'] || title;
+        subtitle = data['project-detail-subtitle'] || '';
+        heroImg = data['project-detail-hero-img'] || '';
+        location = data['project-detail-location'] || '';
+        category = data['project-detail-category'] || '';
+        client = data['project-detail-client'] || '';
+        year = data['project-detail-year'] || '';
+        content = data['project-detail-content'] || '';
+        scope = data['project-detail-scope'] || '';
+        img2 = data['project-detail-img2'] || '';
+        img3 = data['project-detail-img3'] || '';
+      }
+      const gridR = await dbQuery('SELECT value FROM site_settings WHERE key=$1', ['content_projects-grid']);
+      if (gridR && gridR.rows.length > 0) {
+        const gridData = JSON.parse(gridR.rows[0].value);
+        for (let i = 1; i <= 6; i++) {
+          const cardSlug = gridData['projects-card' + i + '-readmore-slug'];
+          if (cardSlug === slug) {
+            if (!heroImg) heroImg = gridData['projects-card' + i + '-img'] || '';
+            if (!title || title === slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) title = gridData['projects-card' + i + '-title'] || title;
+            if (!location) location = gridData['projects-card' + i + '-location'] || '';
+            if (!category) category = gridData['projects-card' + i + '-badge'] || '';
+            if (!content) content = gridData['projects-card' + i + '-desc'] || '';
+            break;
+          }
+        }
+      }
+    }
+
+    const infoItems = [
+      location ? '<div class="detail-info-item"><strong>Location:</strong> ' + location + '</div>' : '',
+      category ? '<div class="detail-info-item"><strong>Category:</strong> ' + category + '</div>' : '',
+      client ? '<div class="detail-info-item"><strong>Client:</strong> ' + client + '</div>' : '',
+      year ? '<div class="detail-info-item"><strong>Year:</strong> ' + year + '</div>' : ''
+    ].filter(Boolean).join('');
+
+    const galleryHtml = (img2 || img3) ? '<div class="detail-gallery" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:2rem">' +
+      (img2 ? '<img src="' + img2 + '" style="width:100%;border-radius:12px" alt="Project gallery" />' : '') +
+      (img3 ? '<img src="' + img3 + '" style="width:100%;border-radius:12px" alt="Project gallery" />' : '') +
+      '</div>' : '';
+
+    const detailHtml = `
+      <section class="hero-banner" data-testid="section-project-detail-hero">
+        ${heroImg ? '<img src="' + heroImg + '" alt="' + title + '" class="hero-banner-bg" />' : ''}
+        <div class="hero-banner-overlay"></div>
+        <div class="hero-banner-content">
+          <div class="container">
+            <h1 class="hero-banner-title" data-field="project-detail-title">${title}</h1>
+            ${subtitle ? '<p class="hero-banner-subtitle" data-field="project-detail-subtitle">' + subtitle + '</p>' : ''}
+          </div>
+        </div>
+      </section>
+      <section class="section bg-white">
+        <div class="container" style="max-width:900px;margin:0 auto">
+          ${infoItems ? '<div class="detail-info-bar" style="display:flex;flex-wrap:wrap;gap:1.5rem;padding:1.5rem;background:#f8fafc;border-radius:12px;margin-bottom:2rem;font-size:0.95rem;color:#334155">' + infoItems + '</div>' : ''}
+          ${content ? '<div class="detail-content" data-field="project-detail-content" style="font-size:1.05rem;line-height:1.8;color:#334155;white-space:pre-line">' + content + '</div>' : '<div class="detail-content" style="font-size:1.05rem;line-height:1.8;color:#64748b;text-align:center;padding:3rem 0">Detail content coming soon. Edit this page from the admin dashboard.</div>'}
+          ${scope ? '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem">Scope of Work</h3><div data-field="project-detail-scope" style="font-size:1rem;line-height:1.8;color:#334155;white-space:pre-line">' + scope + '</div></div>' : ''}
+          ${galleryHtml}
+          <div style="margin-top:3rem;padding-top:2rem;border-top:1px solid #e2e8f0">
+            <a href="/projects" class="service-card-link" style="font-size:1rem">&larr; Back to Projects</a>
+          </div>
+        </div>
+      </section>`;
+    res.send(header + detailHtml + footer);
+  } catch (e) {
+    console.error('Project detail error:', e.message);
+    const content = readThemeFile('404.php');
+    res.status(500).send(executePhpTemplate(content, '404'));
+  }
+});
+
+app.get('/services/:slug', async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    const headerContent = readThemeFile('header.php');
+    const footerContent = readThemeFile('footer.php');
+    let header = executePhpTemplate(headerContent, 'services');
+    let footer = executePhpTemplate(footerContent, 'services');
+    header = await applySavedContent(header, ['header']);
+    footer = await applySavedContent(footer, ['footer']);
+
+    let title = slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    let subtitle = '';
+    let heroImg = '';
+    let content = '';
+    let features = '';
+    let process = '';
+    let img2 = '';
+    let img3 = '';
+
+    if (dbPool) {
+      const r = await dbQuery('SELECT value FROM site_settings WHERE key=$1', ['content_service-detail-' + slug]);
+      if (r && r.rows.length > 0) {
+        const data = JSON.parse(r.rows[0].value);
+        title = data['service-detail-title'] || title;
+        subtitle = data['service-detail-subtitle'] || '';
+        heroImg = data['service-detail-hero-img'] || '';
+        content = data['service-detail-content'] || '';
+        features = data['service-detail-features'] || '';
+        process = data['service-detail-process'] || '';
+        img2 = data['service-detail-img2'] || '';
+        img3 = data['service-detail-img3'] || '';
+      }
+      const listR = await dbQuery('SELECT value FROM site_settings WHERE key=$1', ['content_services-list']);
+      if (listR && listR.rows.length > 0) {
+        const listData = JSON.parse(listR.rows[0].value);
+        for (let i = 1; i <= 6; i++) {
+          const cardSlug = listData['services-card' + i + '-readmore-slug'];
+          if (cardSlug === slug) {
+            if (!heroImg) heroImg = listData['services-card' + i + '-img'] || '';
+            if (!title || title === slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) title = listData['services-card' + i + '-title'] || title;
+            if (!content) content = listData['services-card' + i + '-desc'] || '';
+            break;
+          }
+        }
+      }
+    }
+
+    const galleryHtml = (img2 || img3) ? '<div class="detail-gallery" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:2rem">' +
+      (img2 ? '<img src="' + img2 + '" style="width:100%;border-radius:12px" alt="Service gallery" />' : '') +
+      (img3 ? '<img src="' + img3 + '" style="width:100%;border-radius:12px" alt="Service gallery" />' : '') +
+      '</div>' : '';
+
+    const detailHtml = `
+      <section class="hero-banner" data-testid="section-service-detail-hero">
+        ${heroImg ? '<img src="' + heroImg + '" alt="' + title + '" class="hero-banner-bg" />' : ''}
+        <div class="hero-banner-overlay"></div>
+        <div class="hero-banner-content">
+          <div class="container">
+            <h1 class="hero-banner-title" data-field="service-detail-title">${title}</h1>
+            ${subtitle ? '<p class="hero-banner-subtitle" data-field="service-detail-subtitle">' + subtitle + '</p>' : ''}
+          </div>
+        </div>
+      </section>
+      <section class="section bg-white">
+        <div class="container" style="max-width:900px;margin:0 auto">
+          ${content ? '<div class="detail-content" data-field="service-detail-content" style="font-size:1.05rem;line-height:1.8;color:#334155;white-space:pre-line">' + content + '</div>' : '<div class="detail-content" style="font-size:1.05rem;line-height:1.8;color:#64748b;text-align:center;padding:3rem 0">Detail content coming soon. Edit this page from the admin dashboard.</div>'}
+          ${features ? '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem">Key Features & Capabilities</h3><div data-field="service-detail-features" style="font-size:1rem;line-height:1.8;color:#334155;white-space:pre-line">' + features + '</div></div>' : ''}
+          ${process ? '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem">Our Process & Approach</h3><div data-field="service-detail-process" style="font-size:1rem;line-height:1.8;color:#334155;white-space:pre-line">' + process + '</div></div>' : ''}
+          ${galleryHtml}
+          <div style="margin-top:3rem;padding-top:2rem;border-top:1px solid #e2e8f0">
+            <a href="/services" class="service-card-link" style="font-size:1rem">&larr; Back to Services</a>
+          </div>
+        </div>
+      </section>
+      <section class="cta-section">
+        <div class="container text-center">
+          <h2 class="cta-title">Interested in This Service?</h2>
+          <p class="cta-subtitle">Contact our team to discuss your project requirements and get a consultation.</p>
+          <button onclick="openContactPopup();" class="btn btn-white">Contact Our Team</button>
+        </div>
+      </section>`;
+    res.send(header + detailHtml + footer);
+  } catch (e) {
+    console.error('Service detail error:', e.message);
+    const content = readThemeFile('404.php');
+    res.status(500).send(executePhpTemplate(content, '404'));
+  }
+});
+
 app.get('/404', (req, res) => {
   const content = readThemeFile('404.php');
   res.send(executePhpTemplate(content, '404'));

@@ -726,6 +726,7 @@ h1, h2, h3, h4, h5, h6 {
   margin-top: auto;
   padding-top: 0.75rem;
   transition: color 150ms;
+  text-decoration: none;
 }
 .service-card-link:hover { color: #0369a1; }
 

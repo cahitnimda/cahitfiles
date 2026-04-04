@@ -85,7 +85,9 @@
   }
 
   function loadSavedSectionContent(section) {
-    fetch('/admin/api/site-content/' + section).then(function(r) { return r.json(); }).then(function(d) {
+    var isDetail = (section === 'project-detail' || section === 'service-detail');
+    var loadKey = isDetail ? section + '-' + (state.detailSlug || '') : section;
+    fetch('/admin/api/site-content/' + loadKey).then(function(r) { return r.json(); }).then(function(d) {
       if (d.success && d.data) {
         var data = d.data;
         Object.keys(data).forEach(function(key) {
@@ -370,26 +372,32 @@
       { key: 'services-card1-title', label: 'Service 1 Title', selector: '[data-field=services-card1-title]', type: 'text', defaultVal: 'Marine & Coastal Construction' },
       { key: 'services-card1-desc', label: 'Service 1 Description', selector: '[data-field=services-card1-desc]', type: 'textarea', defaultVal: '' },
       { key: 'services-card1-img', label: 'Service 1 Image', selector: '[data-field=services-card1-img]', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'services-card1-readmore-slug', label: 'Service 1 Read More Slug', selector: '[data-field=services-card1-readmore]', type: 'text', defaultVal: 'marine-coastal-construction' },
 
       { key: 'services-card2-title', label: 'Service 2 Title', selector: '[data-field=services-card2-title]', type: 'text', defaultVal: 'Infrastructure Development' },
       { key: 'services-card2-desc', label: 'Service 2 Description', selector: '[data-field=services-card2-desc]', type: 'textarea', defaultVal: '' },
       { key: 'services-card2-img', label: 'Service 2 Image', selector: '[data-field=services-card2-img]', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'services-card2-readmore-slug', label: 'Service 2 Read More Slug', selector: '[data-field=services-card2-readmore]', type: 'text', defaultVal: 'infrastructure-development' },
 
       { key: 'services-card3-title', label: 'Service 3 Title', selector: '[data-field=services-card3-title]', type: 'text', defaultVal: 'Earthworks' },
       { key: 'services-card3-desc', label: 'Service 3 Description', selector: '[data-field=services-card3-desc]', type: 'textarea', defaultVal: '' },
       { key: 'services-card3-img', label: 'Service 3 Image', selector: '[data-field=services-card3-img]', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'services-card3-readmore-slug', label: 'Service 3 Read More Slug', selector: '[data-field=services-card3-readmore]', type: 'text', defaultVal: 'earthworks' },
 
       { key: 'services-card4-title', label: 'Service 4 Title', selector: '[data-field=services-card4-title]', type: 'text', defaultVal: 'Dewatering & Shoring' },
       { key: 'services-card4-desc', label: 'Service 4 Description', selector: '[data-field=services-card4-desc]', type: 'textarea', defaultVal: '' },
       { key: 'services-card4-img', label: 'Service 4 Image', selector: '[data-field=services-card4-img]', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'services-card4-readmore-slug', label: 'Service 4 Read More Slug', selector: '[data-field=services-card4-readmore]', type: 'text', defaultVal: 'dewatering-shoring' },
 
       { key: 'services-card5-title', label: 'Service 5 Title', selector: '[data-field=services-card5-title]', type: 'text', defaultVal: 'MEP Works' },
       { key: 'services-card5-desc', label: 'Service 5 Description', selector: '[data-field=services-card5-desc]', type: 'textarea', defaultVal: '' },
       { key: 'services-card5-img', label: 'Service 5 Image', selector: '[data-field=services-card5-img]', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'services-card5-readmore-slug', label: 'Service 5 Read More Slug', selector: '[data-field=services-card5-readmore]', type: 'text', defaultVal: 'mep-works' },
 
       { key: 'services-card6-title', label: 'Service 6 Title', selector: '[data-field=services-card6-title]', type: 'text', defaultVal: 'General Construction' },
       { key: 'services-card6-desc', label: 'Service 6 Description', selector: '[data-field=services-card6-desc]', type: 'textarea', defaultVal: '' },
-      { key: 'services-card6-img', label: 'Service 6 Image', selector: '[data-field=services-card6-img]', type: 'image', attr: 'src', defaultVal: '' }
+      { key: 'services-card6-img', label: 'Service 6 Image', selector: '[data-field=services-card6-img]', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'services-card6-readmore-slug', label: 'Service 6 Read More Slug', selector: '[data-field=services-card6-readmore]', type: 'text', defaultVal: 'general-construction' }
     ],
     'services-cta': [
       { key: 'services-cta-title', label: 'CTA Title', selector: '[data-field=services-cta-title]', type: 'text', defaultVal: "Let's Build Your Next Project" },
@@ -407,36 +415,65 @@
       { key: 'projects-card1-location', label: 'Project 1 Location', selector: '[data-field=projects-card1-location]', type: 'text', defaultVal: 'Muscat, Oman' },
       { key: 'projects-card1-badge', label: 'Project 1 Category', selector: '[data-field=projects-card1-badge]', type: 'text', defaultVal: 'Marine' },
       { key: 'projects-card1-img', label: 'Project 1 Image', selector: '[data-field=projects-card1-img]', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'projects-card1-readmore-slug', label: 'Project 1 Read More Slug', selector: '[data-field=projects-card1-readmore]', type: 'text', defaultVal: 'seaport-infrastructure' },
 
       { key: 'projects-card2-title', label: 'Project 2 Title', selector: '[data-field=projects-card2-title]', type: 'text', defaultVal: 'Coastal Protection Systems' },
       { key: 'projects-card2-desc', label: 'Project 2 Description', selector: '[data-field=projects-card2-desc]', type: 'textarea', defaultVal: 'Rock armour installation and coastal defense' },
       { key: 'projects-card2-location', label: 'Project 2 Location', selector: '[data-field=projects-card2-location]', type: 'text', defaultVal: 'Salalah, Oman' },
       { key: 'projects-card2-badge', label: 'Project 2 Category', selector: '[data-field=projects-card2-badge]', type: 'text', defaultVal: 'Coastal' },
       { key: 'projects-card2-img', label: 'Project 2 Image', selector: '[data-field=projects-card2-img]', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'projects-card2-readmore-slug', label: 'Project 2 Read More Slug', selector: '[data-field=projects-card2-readmore]', type: 'text', defaultVal: 'coastal-protection' },
 
       { key: 'projects-card3-title', label: 'Project 3 Title', selector: '[data-field=projects-card3-title]', type: 'text', defaultVal: 'Road Infrastructure Development' },
       { key: 'projects-card3-desc', label: 'Project 3 Description', selector: '[data-field=projects-card3-desc]', type: 'textarea', defaultVal: 'Road construction and infrastructure development' },
       { key: 'projects-card3-location', label: 'Project 3 Location', selector: '[data-field=projects-card3-location]', type: 'text', defaultVal: 'Oman' },
       { key: 'projects-card3-badge', label: 'Project 3 Category', selector: '[data-field=projects-card3-badge]', type: 'text', defaultVal: 'Infrastructure' },
       { key: 'projects-card3-img', label: 'Project 3 Image', selector: '[data-field=projects-card3-img]', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'projects-card3-readmore-slug', label: 'Project 3 Read More Slug', selector: '[data-field=projects-card3-readmore]', type: 'text', defaultVal: 'road-infrastructure' },
 
       { key: 'projects-card4-title', label: 'Project 4 Title', selector: '[data-field=projects-card4-title]', type: 'text', defaultVal: 'Asphalt Paving Works' },
       { key: 'projects-card4-desc', label: 'Project 4 Description', selector: '[data-field=projects-card4-desc]', type: 'textarea', defaultVal: 'Asphalt paving with modern equipment' },
       { key: 'projects-card4-location', label: 'Project 4 Location', selector: '[data-field=projects-card4-location]', type: 'text', defaultVal: 'Oman' },
       { key: 'projects-card4-badge', label: 'Project 4 Category', selector: '[data-field=projects-card4-badge]', type: 'text', defaultVal: 'Infrastructure' },
       { key: 'projects-card4-img', label: 'Project 4 Image', selector: '[data-field=projects-card4-img]', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'projects-card4-readmore-slug', label: 'Project 4 Read More Slug', selector: '[data-field=projects-card4-readmore]', type: 'text', defaultVal: 'asphalt-paving' },
 
       { key: 'projects-card5-title', label: 'Project 5 Title', selector: '[data-field=projects-card5-title]', type: 'text', defaultVal: 'Underground Pipe Installation' },
       { key: 'projects-card5-desc', label: 'Project 5 Description', selector: '[data-field=projects-card5-desc]', type: 'textarea', defaultVal: 'Water and sewage pipe installation' },
       { key: 'projects-card5-location', label: 'Project 5 Location', selector: '[data-field=projects-card5-location]', type: 'text', defaultVal: 'Oman' },
       { key: 'projects-card5-badge', label: 'Project 5 Category', selector: '[data-field=projects-card5-badge]', type: 'text', defaultVal: 'Infrastructure' },
       { key: 'projects-card5-img', label: 'Project 5 Image', selector: '[data-field=projects-card5-img]', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'projects-card5-readmore-slug', label: 'Project 5 Read More Slug', selector: '[data-field=projects-card5-readmore]', type: 'text', defaultVal: 'pipe-installation' },
 
       { key: 'projects-card6-title', label: 'Project 6 Title', selector: '[data-field=projects-card6-title]', type: 'text', defaultVal: 'Concrete Formwork' },
       { key: 'projects-card6-desc', label: 'Project 6 Description', selector: '[data-field=projects-card6-desc]', type: 'textarea', defaultVal: 'Concrete formwork and reinforcement works' },
       { key: 'projects-card6-location', label: 'Project 6 Location', selector: '[data-field=projects-card6-location]', type: 'text', defaultVal: 'Oman' },
       { key: 'projects-card6-badge', label: 'Project 6 Category', selector: '[data-field=projects-card6-badge]', type: 'text', defaultVal: 'Infrastructure' },
-      { key: 'projects-card6-img', label: 'Project 6 Image', selector: '[data-field=projects-card6-img]', type: 'image', attr: 'src', defaultVal: '' }
+      { key: 'projects-card6-img', label: 'Project 6 Image', selector: '[data-field=projects-card6-img]', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'projects-card6-readmore-slug', label: 'Project 6 Read More Slug', selector: '[data-field=projects-card6-readmore]', type: 'text', defaultVal: 'concrete-formwork' }
+    ],
+    'project-detail': [
+      { key: 'project-detail-title', label: 'Project Title', selector: '[data-field=project-detail-title]', type: 'text', defaultVal: '' },
+      { key: 'project-detail-subtitle', label: 'Subtitle / Tagline', selector: '[data-field=project-detail-subtitle]', type: 'text', defaultVal: '' },
+      { key: 'project-detail-hero-img', label: 'Hero Image', selector: '[data-field=project-detail-hero-img]', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'project-detail-location', label: 'Location', selector: '[data-field=project-detail-location]', type: 'text', defaultVal: '' },
+      { key: 'project-detail-category', label: 'Category', selector: '[data-field=project-detail-category]', type: 'text', defaultVal: '' },
+      { key: 'project-detail-client', label: 'Client', selector: '[data-field=project-detail-client]', type: 'text', defaultVal: '' },
+      { key: 'project-detail-year', label: 'Year', selector: '[data-field=project-detail-year]', type: 'text', defaultVal: '' },
+      { key: 'project-detail-content', label: 'Full Description', selector: '[data-field=project-detail-content]', type: 'textarea', defaultVal: '' },
+      { key: 'project-detail-scope', label: 'Scope of Work', selector: '[data-field=project-detail-scope]', type: 'textarea', defaultVal: '' },
+      { key: 'project-detail-img2', label: 'Gallery Image 2', selector: '[data-field=project-detail-img2]', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'project-detail-img3', label: 'Gallery Image 3', selector: '[data-field=project-detail-img3]', type: 'image', attr: 'src', defaultVal: '' }
+    ],
+    'service-detail': [
+      { key: 'service-detail-title', label: 'Service Title', selector: '[data-field=service-detail-title]', type: 'text', defaultVal: '' },
+      { key: 'service-detail-subtitle', label: 'Subtitle / Tagline', selector: '[data-field=service-detail-subtitle]', type: 'text', defaultVal: '' },
+      { key: 'service-detail-hero-img', label: 'Hero Image', selector: '[data-field=service-detail-hero-img]', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'service-detail-content', label: 'Full Description', selector: '[data-field=service-detail-content]', type: 'textarea', defaultVal: '' },
+      { key: 'service-detail-features', label: 'Key Features / Capabilities', selector: '[data-field=service-detail-features]', type: 'textarea', defaultVal: '' },
+      { key: 'service-detail-process', label: 'Our Process / Approach', selector: '[data-field=service-detail-process]', type: 'textarea', defaultVal: '' },
+      { key: 'service-detail-img2', label: 'Gallery Image 2', selector: '[data-field=service-detail-img2]', type: 'image', attr: 'src', defaultVal: '' },
+      { key: 'service-detail-img3', label: 'Gallery Image 3', selector: '[data-field=service-detail-img3]', type: 'image', attr: 'src', defaultVal: '' }
     ],
     'clients-hero': [
       { key: 'clients-hero-title', label: 'Page Title', selector: '[data-field=clients-hero-title]', type: 'text', defaultVal: 'Our Clients' },
@@ -514,6 +551,7 @@
     'services-hero': '[data-testid=section-services-hero]', 'services-list': '[data-testid=section-services-list]',
     'services-cta': '[data-testid=section-cta]',
     'projects-hero': '[data-testid=section-projects-hero]', 'projects-grid': '[data-testid=section-projects-grid]',
+    'project-detail': '[data-testid=section-projects-grid]', 'service-detail': '[data-testid=section-services-list]',
     'clients-hero': '[data-testid=section-clients-hero]', 'clients-grid': '[data-testid=section-clients-grid]',
     'clients-sectors': '[data-testid=section-sectors]',
     'careers-hero': '[data-testid=section-careers-hero]', 'careers-intro': '[data-testid=section-careers-intro]',
@@ -555,13 +593,15 @@
       { id: 'footer', name: 'Footer', group: 'Global' },
       { id: 'services-hero', name: 'Hero Banner', group: 'Page Sections' },
       { id: 'services-list', name: 'Service Cards', group: 'Page Sections' },
-      { id: 'services-cta', name: 'Call to Action', group: 'Page Sections' }
+      { id: 'services-cta', name: 'Call to Action', group: 'Page Sections' },
+      { id: 'service-detail', name: 'Service Detail Page Content', group: 'Detail Pages' }
     ],
     '/projects': [
       { id: 'header', name: 'Header & Navigation', group: 'Global' },
       { id: 'footer', name: 'Footer', group: 'Global' },
       { id: 'projects-hero', name: 'Hero Banner', group: 'Page Sections' },
-      { id: 'projects-grid', name: 'Project Cards', group: 'Page Sections' }
+      { id: 'projects-grid', name: 'Project Cards', group: 'Page Sections' },
+      { id: 'project-detail', name: 'Project Detail Page Content', group: 'Detail Pages' }
     ],
     '/clients': [
       { id: 'header', name: 'Header & Navigation', group: 'Global' },
@@ -598,8 +638,44 @@
       '</div>';
     });
 
+    var isDetailSection = (state.editingSection === 'project-detail' || state.editingSection === 'service-detail');
+    var detailSlugs = [];
+    if (state.editingSection === 'project-detail') {
+      detailSlugs = [
+        { slug: 'seaport-infrastructure', label: 'Seaport Infrastructure' },
+        { slug: 'coastal-protection', label: 'Coastal Protection Systems' },
+        { slug: 'road-infrastructure', label: 'Road Infrastructure Development' },
+        { slug: 'asphalt-paving', label: 'Asphalt Paving Works' },
+        { slug: 'pipe-installation', label: 'Underground Pipe Installation' },
+        { slug: 'concrete-formwork', label: 'Concrete Formwork' }
+      ];
+    } else if (state.editingSection === 'service-detail') {
+      detailSlugs = [
+        { slug: 'marine-coastal-construction', label: 'Marine & Coastal Construction' },
+        { slug: 'infrastructure-development', label: 'Infrastructure Development' },
+        { slug: 'earthworks', label: 'Earthworks' },
+        { slug: 'dewatering-shoring', label: 'Dewatering & Shoring' },
+        { slug: 'mep-works', label: 'MEP Works' },
+        { slug: 'general-construction', label: 'General Construction' }
+      ];
+    }
+
     var fields = sectionFields[state.editingSection] || [];
     var fieldsHtml = '';
+
+    if (isDetailSection) {
+      if (!state.detailSlug && detailSlugs.length > 0) state.detailSlug = detailSlugs[0].slug;
+      fieldsHtml += '<div class="form-group" style="margin-bottom:16px;padding-bottom:16px;border-bottom:2px solid #e2e8f0">' +
+        '<label class="form-label" style="font-weight:700;color:#0A3D6B">Select ' + (state.editingSection === 'project-detail' ? 'Project' : 'Service') + ' to Edit</label>' +
+        '<select class="form-input" id="detailSlugSelector" data-testid="select-detail-slug" style="font-weight:600">' +
+          detailSlugs.map(function(d) {
+            return '<option value="' + d.slug + '"' + (d.slug === state.detailSlug ? ' selected' : '') + '>' + d.label + '</option>';
+          }).join('') +
+        '</select>' +
+        '<p style="font-size:12px;color:#64748b;margin-top:4px">This content appears on the detail page: <strong>/' + (state.editingSection === 'project-detail' ? 'projects' : 'services') + '/' + (state.detailSlug || detailSlugs[0].slug) + '</strong></p>' +
+      '</div>';
+    }
+
     if (fields.length > 0) {
       fields.forEach(function(f) {
         var val = state.editedContent[f.key] || f.defaultVal;
@@ -691,6 +767,15 @@
         document.querySelectorAll('.section-item').forEach(function(s) { s.classList.remove('active'); });
         this.classList.add('active');
         state.editingSection = this.getAttribute('data-section');
+        state.editedContent = {};
+        var isDetail = (state.editingSection === 'project-detail' || state.editingSection === 'service-detail');
+        if (isDetail) {
+          if (!state.detailSlug) {
+            state.detailSlug = state.editingSection === 'project-detail' ? 'seaport-infrastructure' : 'marine-coastal-construction';
+          }
+        } else {
+          state.detailSlug = null;
+        }
         renderPage('content');
         bindEditorActions();
         scrollPreviewToSection(state.editingSection);
@@ -732,10 +817,35 @@
       });
     }
 
+    var detailSlugSel = document.getElementById('detailSlugSelector');
+    if (detailSlugSel) {
+      detailSlugSel.addEventListener('change', function() {
+        state.detailSlug = this.value;
+        state.editedContent = {};
+        var saveKey = state.editingSection + '-' + state.detailSlug;
+        fetch('/admin/api/site-content/' + saveKey)
+          .then(function(r) { return r.json(); })
+          .then(function(result) {
+            if (result.success && result.data) {
+              Object.keys(result.data).forEach(function(k) {
+                state.editedContent[k] = result.data[k];
+              });
+            }
+            renderPage('content');
+            bindEditorActions();
+          }).catch(function() {
+            renderPage('content');
+            bindEditorActions();
+          });
+      });
+    }
+
     var saveBtn = document.getElementById('saveContentBtn');
     if (saveBtn) {
       saveBtn.addEventListener('click', function() {
         var section = state.editingSection || 'hero';
+        var isDetail = (section === 'project-detail' || section === 'service-detail');
+        var saveKey = isDetail ? section + '-' + (state.detailSlug || '') : section;
         var data = {};
         var fields = sectionFields[section] || [];
         fields.forEach(function(f) {
@@ -745,7 +855,7 @@
         });
         saveBtn.disabled = true;
         saveBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Saving...';
-        fetch('/admin/api/site-content/' + section, {
+        fetch('/admin/api/site-content/' + saveKey, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ data: data })

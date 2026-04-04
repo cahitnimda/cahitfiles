@@ -23,6 +23,7 @@
           <h3 class="project-card-title" data-field="projects-card1-title">Seaport Infrastructure</h3>
           <p class="project-card-location" data-field="projects-card1-location">Muscat, Oman</p>
           <p class="project-card-desc" data-field="projects-card1-desc">Quay wall construction and breakwater installation</p>
+          <a href="/projects/seaport-infrastructure" class="service-card-link" data-field="projects-card1-readmore" data-ar="اقرأ المزيد">Read More <svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </div>
 
@@ -35,6 +36,7 @@
           <h3 class="project-card-title" data-field="projects-card2-title">Coastal Protection Systems</h3>
           <p class="project-card-location" data-field="projects-card2-location">Salalah, Oman</p>
           <p class="project-card-desc" data-field="projects-card2-desc">Rock armour installation and coastal defense</p>
+          <a href="/projects/coastal-protection" class="service-card-link" data-field="projects-card2-readmore" data-ar="اقرأ المزيد">Read More <svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </div>
 
@@ -47,6 +49,7 @@
           <h3 class="project-card-title" data-field="projects-card3-title">Road Infrastructure Development</h3>
           <p class="project-card-location" data-field="projects-card3-location">Oman</p>
           <p class="project-card-desc" data-field="projects-card3-desc">Road construction and infrastructure development</p>
+          <a href="/projects/road-infrastructure" class="service-card-link" data-field="projects-card3-readmore" data-ar="اقرأ المزيد">Read More <svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </div>
 
@@ -59,6 +62,7 @@
           <h3 class="project-card-title" data-field="projects-card4-title">Asphalt Paving Works</h3>
           <p class="project-card-location" data-field="projects-card4-location">Oman</p>
           <p class="project-card-desc" data-field="projects-card4-desc">Asphalt paving with modern equipment</p>
+          <a href="/projects/asphalt-paving" class="service-card-link" data-field="projects-card4-readmore" data-ar="اقرأ المزيد">Read More <svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </div>
 
@@ -71,6 +75,7 @@
           <h3 class="project-card-title" data-field="projects-card5-title">Underground Pipe Installation</h3>
           <p class="project-card-location" data-field="projects-card5-location">Oman</p>
           <p class="project-card-desc" data-field="projects-card5-desc">Water and sewage pipe installation</p>
+          <a href="/projects/pipe-installation" class="service-card-link" data-field="projects-card5-readmore" data-ar="اقرأ المزيد">Read More <svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </div>
 
@@ -83,6 +88,7 @@
           <h3 class="project-card-title" data-field="projects-card6-title">Concrete Formwork</h3>
           <p class="project-card-location" data-field="projects-card6-location">Oman</p>
           <p class="project-card-desc" data-field="projects-card6-desc">Concrete formwork and reinforcement works</p>
+          <a href="/projects/concrete-formwork" class="service-card-link" data-field="projects-card6-readmore" data-ar="اقرأ المزيد">Read More <svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </div>
     </div>

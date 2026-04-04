@@ -29,6 +29,7 @@
             <li><span class="bullet"></span> <span data-ar="اللسانات البحرية">Groynes</span></li>
             <li><span class="bullet"></span> <span data-ar="التدعيمات الساحلية">Revetments</span></li>
           </ul>
+          <a href="/services/marine-coastal-construction" class="service-card-link" data-field="services-card1-readmore" data-ar="اقرأ المزيد">Read More <svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </div>
 
@@ -39,6 +40,7 @@
         <div class="service-card-content">
           <h3 class="service-card-title" data-ar="تطوير البنية التحتية" data-field="services-card2-title">Infrastructure Development</h3>
           <p class="service-card-desc" data-ar="تتطلب مشاريع البنية التحتية اليوم حلول هندسية مبتكرة وتقنيات بناء متقدمة. تقدم كاهيت حلول البنية التحتية بما في ذلك المرافق والطرق والمنشآت الصناعية." data-field="services-card2-desc">Infrastructure projects today require innovative engineering solutions and advanced construction techniques. Cahit delivers infrastructure solutions including utilities, roads and industrial facilities.</p>
+          <a href="/services/infrastructure-development" class="service-card-link" data-field="services-card2-readmore" data-ar="اقرأ المزيد">Read More <svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </div>
 
@@ -49,6 +51,7 @@
         <div class="service-card-content">
           <h3 class="service-card-title" data-ar="أعمال الحفر والردم" data-field="services-card3-title">Earthworks</h3>
           <p class="service-card-desc" data-ar="نقدم خدمات أعمال ترابية شاملة تشمل الحفر والتسوية والتمهيد والدمك لمشاريع البنية التحتية ومواقع البناء." data-field="services-card3-desc">We provide comprehensive earthworks services including excavation, grading, leveling and compaction for infrastructure projects and construction sites.</p>
+          <a href="/services/earthworks" class="service-card-link" data-field="services-card3-readmore" data-ar="اقرأ المزيد">Read More <svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </div>
 
@@ -65,6 +68,7 @@
             <li><span class="bullet"></span> <span data-ar="الخوازيق المعدنية">Sheet piling</span></li>
             <li><span class="bullet"></span> <span data-ar="الجدران الداعمة">Soldier walls</span></li>
           </ul>
+          <a href="/services/dewatering-shoring" class="service-card-link" data-field="services-card4-readmore" data-ar="اقرأ المزيد">Read More <svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </div>
 
@@ -81,6 +85,7 @@
             <li><span class="bullet"></span> <span data-ar="الأنابيب الصناعية">Industrial Piping</span></li>
             <li><span class="bullet"></span> <span data-ar="أنظمة الري">Irrigation Systems</span></li>
           </ul>
+          <a href="/services/mep-works" class="service-card-link" data-field="services-card5-readmore" data-ar="اقرأ المزيد">Read More <svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </div>
 
@@ -96,6 +101,7 @@
             <li><span class="bullet"></span> <span data-ar="التزام بالسلامة والجودة والتسليم في الوقت المحدد">Commitment to safety, quality, and on-time delivery</span></li>
             <li><span class="bullet"></span> <span data-ar="خدمات التجديد وإعادة التصميم وإدارة المشاريع">Renovation, remodeling, and project management services</span></li>
           </ul>
+          <a href="/services/general-construction" class="service-card-link" data-field="services-card6-readmore" data-ar="اقرأ المزيد">Read More <svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
         </div>
       </div>
     </div>

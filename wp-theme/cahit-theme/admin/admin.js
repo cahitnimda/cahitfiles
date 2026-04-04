@@ -12,6 +12,10 @@
     ],
     leads: [],
     blogPosts: [],
+    projectCards: [],
+    serviceCards: [],
+    cardManagerType: 'projects',
+    editingCardIndex: null,
     mediaItems: [
       { name: 'hero-video.mp4', type: 'video', size: '12.4 MB', date: '2025-03-10' },
       { name: 'marine-construction.png', type: 'image', size: '2.1 MB', date: '2025-03-09' },
@@ -44,6 +48,7 @@
     loadBlogPosts();
     loadMediaFromServer();
     loadSiteSettings();
+    loadDynamicCards();
     bindNavigation();
     bindMobileMenu();
     bindLogout();
@@ -146,6 +151,7 @@
       case 'dashboard': content.innerHTML = renderDashboard(); break;
       case 'pages': content.innerHTML = renderPages(); bindPageActions(); break;
       case 'content': content.innerHTML = renderContentEditor(); bindEditorActions(); break;
+      case 'cards': content.innerHTML = renderCardManager(); bindCardManagerActions(); break;
       case 'media': content.innerHTML = renderMedia(); bindMediaActions(); break;
       case 'blog': content.innerHTML = renderBlogManager(); loadBlogPosts(); break;
       case 'leads': content.innerHTML = renderLeads(); break;
@@ -618,6 +624,250 @@
       { id: 'careers-cta', name: 'Call to Action', group: 'Page Sections' }
     ]
   };
+
+  function renderCardManager() {
+    if (!state.cardManagerType) state.cardManagerType = 'projects';
+    var cards = state.cardManagerType === 'projects' ? (state.projectCards || []) : (state.serviceCards || []);
+    var isProjects = state.cardManagerType === 'projects';
+
+    var cardsHtml = '';
+    if (cards.length === 0) {
+      cardsHtml = '<div class="empty-state" style="padding:40px;text-align:center"><div class="empty-state-title">No cards yet</div><p>Click "Add New Card" to create your first ' + (isProjects ? 'project' : 'service') + ' card.</p></div>';
+    } else {
+      cards.forEach(function(card, idx) {
+        cardsHtml += '<div class="card-manager-item" data-index="' + idx + '" data-testid="card-item-' + idx + '">' +
+          '<div class="card-manager-drag">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="8" y2="6.01"/><line x1="16" y1="6" x2="16" y2="6.01"/><line x1="8" y1="12" x2="8" y2="12.01"/><line x1="16" y1="12" x2="16" y2="12.01"/><line x1="8" y1="18" x2="8" y2="18.01"/><line x1="16" y1="18" x2="16" y2="18.01"/></svg>' +
+          '</div>' +
+          '<div class="card-manager-thumb">' +
+            (card.img ? '<img src="' + card.img + '" alt="" />' : '<div class="card-manager-thumb-placeholder"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>') +
+          '</div>' +
+          '<div class="card-manager-info">' +
+            '<div class="card-manager-title">' + (card.title || 'Untitled') + '</div>' +
+            '<div class="card-manager-slug">' + (isProjects ? '/projects/' : '/services/') + (card.slug || '') + '</div>' +
+            (isProjects ? '<div class="card-manager-meta">' + (card.badge || '') + (card.location ? ' &middot; ' + card.location : '') + '</div>' : '') +
+          '</div>' +
+          '<div class="card-manager-actions">' +
+            '<button class="btn-icon card-move-up" data-idx="' + idx + '" title="Move Up" data-testid="btn-move-up-' + idx + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg></button>' +
+            '<button class="btn-icon card-move-down" data-idx="' + idx + '" title="Move Down" data-testid="btn-move-down-' + idx + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></button>' +
+            '<button class="btn-icon card-edit-btn" data-idx="' + idx + '" title="Edit" data-testid="btn-edit-card-' + idx + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
+            '<button class="btn-icon card-delete-btn" data-idx="' + idx + '" title="Delete" data-testid="btn-delete-card-' + idx + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' +
+          '</div>' +
+        '</div>';
+      });
+    }
+
+    var editFormHtml = '';
+    if (state.editingCardIndex !== undefined && state.editingCardIndex !== null) {
+      var ec = cards[state.editingCardIndex] || {};
+      editFormHtml = '<div class="card-edit-form" data-testid="card-edit-form">' +
+        '<h3 style="margin:0 0 16px;font-size:1.1rem;font-weight:600;color:#0A3D6B">Edit ' + (isProjects ? 'Project' : 'Service') + ' Card</h3>' +
+        '<div class="form-group"><label class="form-label">Title</label><input class="form-input card-field" data-card-field="title" value="' + (ec.title || '').replace(/"/g,'&quot;') + '" data-testid="input-card-title" /></div>' +
+        '<div class="form-group"><label class="form-label">Slug (URL path)</label><input class="form-input card-field" data-card-field="slug" value="' + (ec.slug || '').replace(/"/g,'&quot;') + '" data-testid="input-card-slug" placeholder="e.g. my-project-name" /></div>' +
+        '<div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea card-field" data-card-field="desc" data-testid="input-card-desc" rows="3">' + (ec.desc || '') + '</textarea></div>' +
+        '<div class="form-group"><label class="form-label">Image URL</label><input class="form-input card-field" data-card-field="img" value="' + (ec.img || '').replace(/"/g,'&quot;') + '" data-testid="input-card-img" />' +
+          '<div class="card-img-upload" style="margin-top:8px">' +
+            '<input type="file" class="upload-file-input" id="cardImgUpload" accept="image/*" data-testid="upload-card-img" style="display:none" />' +
+            '<button class="btn btn-outline btn-sm" id="cardImgUploadBtn" data-testid="btn-upload-card-img" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Upload Image</button>' +
+            (ec.img ? '<img src="' + ec.img + '" style="height:60px;border-radius:8px;margin-left:10px;object-fit:cover" />' : '') +
+          '</div>' +
+        '</div>' +
+        (isProjects ? '<div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          '<div class="form-group"><label class="form-label">Category Badge</label><input class="form-input card-field" data-card-field="badge" value="' + (ec.badge || '').replace(/"/g,'&quot;') + '" data-testid="input-card-badge" /></div>' +
+          '<div class="form-group"><label class="form-label">Location</label><input class="form-input card-field" data-card-field="location" value="' + (ec.location || '').replace(/"/g,'&quot;') + '" data-testid="input-card-location" /></div>' +
+        '</div>' : '') +
+        (!isProjects ? '<div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          '<div class="form-group"><label class="form-label">Title (Arabic)</label><input class="form-input card-field" data-card-field="titleAr" value="' + (ec.titleAr || '').replace(/"/g,'&quot;') + '" dir="rtl" data-testid="input-card-titleAr" /></div>' +
+          '<div class="form-group"><label class="form-label">Description (Arabic)</label><input class="form-input card-field" data-card-field="descAr" value="' + (ec.descAr || '').replace(/"/g,'&quot;') + '" dir="rtl" data-testid="input-card-descAr" /></div>' +
+        '</div>' : '') +
+        '<div style="display:flex;gap:8px;margin-top:16px">' +
+          '<button class="btn btn-primary" id="saveCardEditBtn" data-testid="btn-save-card-edit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Save Card</button>' +
+          '<button class="btn btn-outline" id="cancelCardEditBtn" data-testid="btn-cancel-card-edit">Cancel</button>' +
+        '</div>' +
+      '</div>';
+    }
+
+    return '' +
+      '<div class="toolbar">' +
+        '<h2 style="margin:0;font-weight:600;font-size:1rem;color:#0A3D6B">Card Manager</h2>' +
+        '<div class="toolbar-spacer"></div>' +
+      '</div>' +
+      '<div style="padding:24px">' +
+        '<div style="display:flex;gap:12px;margin-bottom:20px;align-items:center;flex-wrap:wrap">' +
+          '<div class="card-type-tabs" data-testid="card-type-tabs">' +
+            '<button class="card-type-tab' + (isProjects ? ' active' : '') + '" data-type="projects" data-testid="tab-projects">Projects (' + (state.projectCards || []).length + ')</button>' +
+            '<button class="card-type-tab' + (!isProjects ? ' active' : '') + '" data-type="services" data-testid="tab-services">Services (' + (state.serviceCards || []).length + ')</button>' +
+          '</div>' +
+          '<div style="flex:1"></div>' +
+          '<button class="btn btn-primary" id="addNewCardBtn" data-testid="btn-add-card"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add New Card</button>' +
+          '<button class="btn btn-outline" id="saveAllCardsBtn" data-testid="btn-save-all-cards"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save & Publish</button>' +
+        '</div>' +
+        '<p style="font-size:13px;color:#64748b;margin-bottom:16px">Add, edit, reorder, or remove ' + (isProjects ? 'project' : 'service') + ' cards. Click "Save & Publish" to update the live site. Each card automatically gets a "Read More" link to its detail page.</p>' +
+        '<div class="card-manager-list" data-testid="card-manager-list">' + cardsHtml + '</div>' +
+        editFormHtml +
+      '</div>';
+  }
+
+  function bindCardManagerActions() {
+    document.querySelectorAll('.card-type-tab').forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        state.cardManagerType = this.getAttribute('data-type');
+        state.editingCardIndex = null;
+        renderPage('cards');
+      });
+    });
+
+    var addBtn = document.getElementById('addNewCardBtn');
+    if (addBtn) {
+      addBtn.addEventListener('click', function() {
+        var isProjects = state.cardManagerType === 'projects';
+        var cards = isProjects ? (state.projectCards || []) : (state.serviceCards || []);
+        var newId = (isProjects ? 'proj-' : 'svc-') + Date.now();
+        var newCard = { id: newId, title: '', slug: '', desc: '', img: '' };
+        if (isProjects) { newCard.badge = ''; newCard.location = ''; }
+        else { newCard.titleAr = ''; newCard.descAr = ''; }
+        cards.push(newCard);
+        if (isProjects) state.projectCards = cards; else state.serviceCards = cards;
+        state.editingCardIndex = cards.length - 1;
+        renderPage('cards');
+      });
+    }
+
+    document.querySelectorAll('.card-edit-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        state.editingCardIndex = parseInt(this.getAttribute('data-idx'));
+        renderPage('cards');
+      });
+    });
+
+    document.querySelectorAll('.card-delete-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var idx = parseInt(this.getAttribute('data-idx'));
+        var isProjects = state.cardManagerType === 'projects';
+        var cards = isProjects ? (state.projectCards || []) : (state.serviceCards || []);
+        var cardTitle = cards[idx] ? cards[idx].title : '';
+        if (confirm('Delete "' + (cardTitle || 'this card') + '"? This cannot be undone.')) {
+          cards.splice(idx, 1);
+          if (isProjects) state.projectCards = cards; else state.serviceCards = cards;
+          state.editingCardIndex = null;
+          renderPage('cards');
+          showToast('Card deleted. Click "Save & Publish" to update the live site.', 'success');
+        }
+      });
+    });
+
+    document.querySelectorAll('.card-move-up').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var idx = parseInt(this.getAttribute('data-idx'));
+        if (idx <= 0) return;
+        var isProjects = state.cardManagerType === 'projects';
+        var cards = isProjects ? (state.projectCards || []) : (state.serviceCards || []);
+        var temp = cards[idx]; cards[idx] = cards[idx - 1]; cards[idx - 1] = temp;
+        if (isProjects) state.projectCards = cards; else state.serviceCards = cards;
+        state.editingCardIndex = null;
+        renderPage('cards');
+      });
+    });
+
+    document.querySelectorAll('.card-move-down').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var idx = parseInt(this.getAttribute('data-idx'));
+        var isProjects = state.cardManagerType === 'projects';
+        var cards = isProjects ? (state.projectCards || []) : (state.serviceCards || []);
+        if (idx >= cards.length - 1) return;
+        var temp = cards[idx]; cards[idx] = cards[idx + 1]; cards[idx + 1] = temp;
+        if (isProjects) state.projectCards = cards; else state.serviceCards = cards;
+        state.editingCardIndex = null;
+        renderPage('cards');
+      });
+    });
+
+    var cancelBtn = document.getElementById('cancelCardEditBtn');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', function() {
+        state.editingCardIndex = null;
+        renderPage('cards');
+      });
+    }
+
+    var saveEditBtn = document.getElementById('saveCardEditBtn');
+    if (saveEditBtn) {
+      saveEditBtn.addEventListener('click', function() {
+        var isProjects = state.cardManagerType === 'projects';
+        var cards = isProjects ? (state.projectCards || []) : (state.serviceCards || []);
+        var card = cards[state.editingCardIndex];
+        if (!card) return;
+        document.querySelectorAll('.card-field').forEach(function(f) {
+          var field = f.getAttribute('data-card-field');
+          card[field] = f.tagName === 'TEXTAREA' ? f.value : f.value;
+        });
+        if (!card.slug && card.title) {
+          card.slug = card.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+        }
+        if (isProjects) state.projectCards = cards; else state.serviceCards = cards;
+        state.editingCardIndex = null;
+        renderPage('cards');
+        showToast('Card updated. Click "Save & Publish" to update the live site.', 'success');
+      });
+    }
+
+    var uploadBtn = document.getElementById('cardImgUploadBtn');
+    var uploadInput = document.getElementById('cardImgUpload');
+    if (uploadBtn && uploadInput) {
+      uploadBtn.addEventListener('click', function() { uploadInput.click(); });
+      uploadInput.addEventListener('change', function() {
+        if (!this.files || !this.files[0]) return;
+        var formData = new FormData();
+        formData.append('file', this.files[0]);
+        fetch('/admin/api/upload', { method: 'POST', body: formData })
+          .then(function(r) { return r.json(); })
+          .then(function(result) {
+            if (result.success && result.url) {
+              var imgField = document.querySelector('[data-card-field="img"]');
+              if (imgField) imgField.value = result.url;
+              showToast('Image uploaded', 'success');
+            }
+          }).catch(function() { showToast('Upload failed', 'error'); });
+      });
+    }
+
+    var saveAllBtn = document.getElementById('saveAllCardsBtn');
+    if (saveAllBtn) {
+      saveAllBtn.addEventListener('click', function() {
+        var isProjects = state.cardManagerType === 'projects';
+        var cards = isProjects ? (state.projectCards || []) : (state.serviceCards || []);
+        var type = isProjects ? 'projects' : 'services';
+        saveAllBtn.disabled = true;
+        saveAllBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Saving...';
+        fetch('/admin/api/dynamic-cards/' + type, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cards: cards })
+        }).then(function(r) { return r.json(); }).then(function(result) {
+          saveAllBtn.disabled = false;
+          saveAllBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save & Publish';
+          if (result.success) {
+            showToast(cards.length + ' ' + type + ' cards saved and published!', 'success');
+          } else {
+            showToast('Error saving: ' + (result.error || 'Unknown'), 'error');
+          }
+        }).catch(function() {
+          saveAllBtn.disabled = false;
+          saveAllBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save & Publish';
+          showToast('Error saving cards', 'error');
+        });
+      });
+    }
+  }
+
+  function loadDynamicCards() {
+    fetch('/admin/api/dynamic-cards/projects').then(function(r) { return r.json(); }).then(function(d) {
+      if (d.success && d.cards) state.projectCards = d.cards;
+    }).catch(function() {});
+    fetch('/admin/api/dynamic-cards/services').then(function(r) { return r.json(); }).then(function(d) {
+      if (d.success && d.cards) state.serviceCards = d.cards;
+    }).catch(function() {});
+  }
 
   function renderContentEditor() {
     var currentPath = state.editingPage || '/';

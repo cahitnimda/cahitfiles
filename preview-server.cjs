@@ -1077,6 +1077,87 @@ app.delete('/admin/api/blog-posts/:id', async (req, res) => {
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
 
+// Default cards data
+const defaultProjectCards = [
+  { id: 'proj-1', title: 'Seaport Infrastructure', slug: 'seaport-infrastructure', badge: 'Marine', location: 'Muscat, Oman', desc: 'Quay wall construction and breakwater installation', img: 'https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/ScxGkCDjPFNOhvON.png' },
+  { id: 'proj-2', title: 'Coastal Protection Systems', slug: 'coastal-protection', badge: 'Coastal', location: 'Salalah, Oman', desc: 'Rock armour installation and coastal defense', img: 'https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/zrgzKMxwmxJkeDsu.jpg' },
+  { id: 'proj-3', title: 'Road Infrastructure Development', slug: 'road-infrastructure', badge: 'Infrastructure', location: 'Oman', desc: 'Road construction and infrastructure development', img: 'https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/gvWLawWCNocSINuR.jpeg' },
+  { id: 'proj-4', title: 'Asphalt Paving Works', slug: 'asphalt-paving', badge: 'Infrastructure', location: 'Oman', desc: 'Asphalt paving with modern equipment', img: 'https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/GjfldJYeoGyqGIMR.jpeg' },
+  { id: 'proj-5', title: 'Underground Pipe Installation', slug: 'pipe-installation', badge: 'Infrastructure', location: 'Oman', desc: 'Water and sewage pipe installation', img: 'https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/IGKoWMSOFVCVNNKX.jpg' },
+  { id: 'proj-6', title: 'Concrete Formwork', slug: 'concrete-formwork', badge: 'Infrastructure', location: 'Oman', desc: 'Concrete formwork and reinforcement works', img: 'https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/JjoMvapXmvuuLACi.png' }
+];
+
+const defaultServiceCards = [
+  { id: 'svc-1', title: 'Marine & Coastal Construction', slug: 'marine-coastal-construction', desc: 'Cahit Trading & Contracting LLC provides specialized marine construction services including:', img: 'https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/eErINryfjAMBHdEq.png', titleAr: 'البناء البحري والساحلي', descAr: 'تقدم شركة كاهيت للتجارة والمقاولات خدمات بناء بحري متخصصة تشمل:' },
+  { id: 'svc-2', title: 'Infrastructure Development', slug: 'infrastructure-development', desc: 'Infrastructure projects today require innovative engineering solutions and advanced construction techniques. Cahit delivers infrastructure solutions including utilities, roads and industrial facilities.', img: 'https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/gvWLawWCNocSINuR.jpeg', titleAr: 'تطوير البنية التحتية', descAr: 'تتطلب مشاريع البنية التحتية اليوم حلول هندسية مبتكرة وتقنيات بناء متقدمة.' },
+  { id: 'svc-3', title: 'Earthworks', slug: 'earthworks', desc: 'We provide comprehensive earthworks services including excavation, grading, leveling and compaction for infrastructure projects and construction sites.', img: 'https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/hMZPCXiHvRhErvHk.gif', titleAr: 'أعمال الحفر والردم', descAr: 'نقدم خدمات أعمال ترابية شاملة تشمل الحفر والتسوية والتمهيد والدمك.' },
+  { id: 'svc-4', title: 'Dewatering & Shoring', slug: 'dewatering-shoring', desc: 'We design and implement advanced groundwater control systems including:', img: 'https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/eErINryfjAMBHdEq.png', titleAr: 'نزح المياه والتدعيم', descAr: 'نصمم وننفذ أنظمة متقدمة للتحكم في المياه الجوفية تشمل:' },
+  { id: 'svc-5', title: 'MEP Works', slug: 'mep-works', desc: 'Our MEP services include:', img: 'https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/qZRtUjMizSFySgTf.png', titleAr: 'الأعمال الكهروميكانيكية', descAr: 'تشمل خدماتنا الكهروميكانيكية:' },
+  { id: 'svc-6', title: 'General Construction', slug: 'general-construction', desc: 'Comprehensive residential, commercial, and industrial building solutions:', img: '/assets/images/general-construction.jpg', titleAr: 'البناء العام', descAr: 'حلول بناء شاملة للمشاريع السكنية والتجارية والصناعية:' }
+];
+
+async function getProjectCards() {
+  try {
+    const val = await dbGetSetting('dynamic_project_cards');
+    if (val) return JSON.parse(val);
+  } catch(e) {}
+  return defaultProjectCards;
+}
+
+async function getServiceCards() {
+  try {
+    const val = await dbGetSetting('dynamic_service_cards');
+    if (val) return JSON.parse(val);
+  } catch(e) {}
+  return defaultServiceCards;
+}
+
+function renderProjectCardsHtml(cards) {
+  const arrowSvg = '<svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>';
+  return cards.map(c => `<div class="project-card" data-testid="card-project-${c.slug}">
+    <div class="project-card-image">
+      <img src="${c.img || ''}" alt="${(c.title||'').replace(/"/g,'&quot;')}" />
+      <span class="project-category-badge">${c.badge || ''}</span>
+    </div>
+    <div class="project-card-content">
+      <h3 class="project-card-title">${c.title || ''}</h3>
+      <p class="project-card-location">${c.location || ''}</p>
+      <p class="project-card-desc">${c.desc || ''}</p>
+      <a href="/projects/${c.slug}" class="service-card-link" data-ar="\u0627\u0642\u0631\u0623 \u0627\u0644\u0645\u0632\u064a\u062f">Read More ${arrowSvg}</a>
+    </div>
+  </div>`).join('\n');
+}
+
+function renderServiceCardsHtml(cards) {
+  const arrowSvg = '<svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>';
+  return cards.map(c => `<div class="service-card" data-testid="service-${c.slug}">
+    <div class="service-card-image">
+      <img src="${c.img || ''}" alt="${(c.title||'').replace(/"/g,'&quot;')}" />
+    </div>
+    <div class="service-card-content">
+      <h3 class="service-card-title" ${c.titleAr ? 'data-ar="'+c.titleAr.replace(/"/g,'&quot;')+'"' : ''}>${c.title || ''}</h3>
+      <p class="service-card-desc" ${c.descAr ? 'data-ar="'+c.descAr.replace(/"/g,'&quot;')+'"' : ''}>${c.desc || ''}</p>
+      <a href="/services/${c.slug}" class="service-card-link" data-ar="\u0627\u0642\u0631\u0623 \u0627\u0644\u0645\u0632\u064a\u062f">Read More ${arrowSvg}</a>
+    </div>
+  </div>`).join('\n');
+}
+
+// Dynamic Cards API
+app.get('/admin/api/dynamic-cards/:type', async (req, res) => {
+  try {
+    const cards = req.params.type === 'projects' ? await getProjectCards() : await getServiceCards();
+    res.json({ success: true, cards });
+  } catch(e) { res.json({ success: false, error: e.message }); }
+});
+
+app.put('/admin/api/dynamic-cards/:type', express.json(), async (req, res) => {
+  try {
+    const key = req.params.type === 'projects' ? 'dynamic_project_cards' : 'dynamic_service_cards';
+    await dbSetSetting(key, JSON.stringify(req.body.cards || []));
+    res.json({ success: true });
+  } catch(e) { res.json({ success: false, error: e.message }); }
+});
+
 // Site Content Save/Load
 app.get('/admin/api/site-content/:key', async (req, res) => {
   try {
@@ -1165,14 +1246,22 @@ app.get('/about', async (req, res) => {
 app.get('/services', async (req, res) => {
   const content = readThemeFile('page-services.php');
   let html = executePhpTemplate(content, 'services');
-  html = await applySavedContent(html, ['services-hero', 'services-list', 'services-cta', 'header', 'footer']);
+  html = await applySavedContent(html, ['services-hero', 'services-cta', 'header', 'footer']);
+  const cards = await getServiceCards();
+  const cardsHtml = renderServiceCardsHtml(cards);
+  html = html.replace(/<div class="services-grid">[\s\S]*?<\/div>\s*<\/div>\s*<\/section>/m,
+    '<div class="services-grid">' + cardsHtml + '</div></div></section>');
   res.send(html);
 });
 
 app.get('/projects', async (req, res) => {
   const content = readThemeFile('page-projects.php');
   let html = executePhpTemplate(content, 'projects');
-  html = await applySavedContent(html, ['projects-hero', 'projects-grid', 'header', 'footer']);
+  html = await applySavedContent(html, ['projects-hero', 'header', 'footer']);
+  const cards = await getProjectCards();
+  const cardsHtml = renderProjectCardsHtml(cards);
+  html = html.replace(/<div class="projects-grid">[\s\S]*?<\/div>\s*<\/div>\s*<\/section>/m,
+    '<div class="projects-grid">' + cardsHtml + '</div></div></section>');
   res.send(html);
 });
 
@@ -1293,20 +1382,14 @@ app.get('/projects/:slug', async (req, res) => {
         img2 = data['project-detail-img2'] || '';
         img3 = data['project-detail-img3'] || '';
       }
-      const gridR = await dbQuery('SELECT value FROM site_settings WHERE key=$1', ['content_projects-grid']);
-      if (gridR && gridR.rows.length > 0) {
-        const gridData = JSON.parse(gridR.rows[0].value);
-        for (let i = 1; i <= 6; i++) {
-          const cardSlug = gridData['projects-card' + i + '-readmore-slug'];
-          if (cardSlug === slug) {
-            if (!heroImg) heroImg = gridData['projects-card' + i + '-img'] || '';
-            if (!title || title === slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) title = gridData['projects-card' + i + '-title'] || title;
-            if (!location) location = gridData['projects-card' + i + '-location'] || '';
-            if (!category) category = gridData['projects-card' + i + '-badge'] || '';
-            if (!content) content = gridData['projects-card' + i + '-desc'] || '';
-            break;
-          }
-        }
+      const projCards = await getProjectCards();
+      const matchCard = projCards.find(c => c.slug === slug);
+      if (matchCard) {
+        if (!heroImg) heroImg = matchCard.img || '';
+        if (!title || title === slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) title = matchCard.title || title;
+        if (!location) location = matchCard.location || '';
+        if (!category) category = matchCard.badge || '';
+        if (!content) content = matchCard.desc || '';
       }
     }
 
@@ -1384,18 +1467,12 @@ app.get('/services/:slug', async (req, res) => {
         img2 = data['service-detail-img2'] || '';
         img3 = data['service-detail-img3'] || '';
       }
-      const listR = await dbQuery('SELECT value FROM site_settings WHERE key=$1', ['content_services-list']);
-      if (listR && listR.rows.length > 0) {
-        const listData = JSON.parse(listR.rows[0].value);
-        for (let i = 1; i <= 6; i++) {
-          const cardSlug = listData['services-card' + i + '-readmore-slug'];
-          if (cardSlug === slug) {
-            if (!heroImg) heroImg = listData['services-card' + i + '-img'] || '';
-            if (!title || title === slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) title = listData['services-card' + i + '-title'] || title;
-            if (!content) content = listData['services-card' + i + '-desc'] || '';
-            break;
-          }
-        }
+      const svcCards = await getServiceCards();
+      const matchSvc = svcCards.find(c => c.slug === slug);
+      if (matchSvc) {
+        if (!heroImg) heroImg = matchSvc.img || '';
+        if (!title || title === slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) title = matchSvc.title || title;
+        if (!content) content = matchSvc.desc || '';
       }
     }
 

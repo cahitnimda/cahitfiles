@@ -42,3 +42,9 @@ id = "YooIItdEBp-OdC89aa9-o"
 uri = "file://CAHIT-ADMIN-GUIDE.md"
 type = "text"
 title = "Cahit Admin Dashboard - Complete Guide"
+
+[[outputs]]
+id = "ysXUCXDaKrVCTiK8_Wi3v"
+uri = "file://Cahit-Admin-Dashboard-Guide.docx"
+type = "word_document"
+title = "Cahit Admin Dashboard - Complete Guide (.docx)"

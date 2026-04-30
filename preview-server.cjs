@@ -876,13 +876,33 @@ app.post('/admin/api/ai-blog-image', express.json(), async (req, res) => {
         prompt: prompt,
         n: 1,
         size: '1792x1024',
-        quality: 'standard'
+        quality: 'standard',
+        response_format: 'b64_json'
       })
     });
     const data = await response.json();
     if (data.error) throw new Error(data.error.message);
-    const imageUrl = data.data[0].url;
-    res.json({ success: true, url: imageUrl });
+
+    let buffer = null;
+    let mime = 'image/png';
+    const b64 = data.data && data.data[0] && data.data[0].b64_json;
+    if (b64) {
+      buffer = Buffer.from(b64, 'base64');
+    } else if (data.data && data.data[0] && data.data[0].url) {
+      const imgRes = await fetch(data.data[0].url);
+      if (!imgRes.ok) throw new Error('Failed to download generated image');
+      const arr = await imgRes.arrayBuffer();
+      buffer = Buffer.from(arr);
+      const ct = (imgRes.headers.get('content-type') || '').toLowerCase();
+      if (ct.includes('jpeg') || ct.includes('jpg')) mime = 'image/jpeg';
+      else if (ct.includes('webp')) mime = 'image/webp';
+      else if (ct.includes('gif')) mime = 'image/gif';
+    } else {
+      throw new Error('No image data returned');
+    }
+
+    const dataUrl = 'data:' + mime + ';base64,' + buffer.toString('base64');
+    res.json({ success: true, url: dataUrl });
   } catch (err) {
     console.error('AI image generation error:', err.message || err);
     res.json({ success: false, error: err.message || 'Image generation failed' });
@@ -1406,7 +1426,7 @@ app.get('/blog', async (req, res) => {
           const safeTitleAr = escapeHtmlSafe(p.title_ar);
           const safeExcerpt = escapeHtmlSafe(p.excerpt);
           const safeExcerptAr = escapeHtmlSafe(p.excerpt_ar);
-          const safeImg = encodeURI(p.image_url || '');
+          const safeImg = escapeHtmlSafe(p.image_url || '');
           const safeSlug = encodeURIComponent(p.slug || '');
           postsHtml += `<div class="blog-card" data-testid="card-blog-${p.id}">
             ${p.image_url ? '<div class="blog-card-image"><img src="' + safeImg + '" alt="' + safeTitle + '" /></div>' : '<div class="blog-card-image"><div style="height:200px;background:linear-gradient(135deg,#0A3D6B,#0ea5e9);display:flex;align-items:center;justify-content:center;color:#fff;font-size:2rem;font-weight:700">' + escapeHtmlSafe((p.title || '')[0]) + '</div></div>'}
@@ -1448,7 +1468,7 @@ app.get('/blog/:slug', async (req, res) => {
     let header = executePhpTemplate(headerContent, 'blog');
     let footer = executePhpTemplate(footerContent, 'blog');
     const safePostTitle = escapeHtmlSafe(post.title);
-    const safePostImg = encodeURI(post.image_url || '');
+    const safePostImg = escapeHtmlSafe(post.image_url || '');
     const safePostContent = post.content ? sanitizeBlogHtml(post.content) : escapeHtmlSafe(post.excerpt || '');
     const postHtml = `
       <section class="hero-banner" style="min-height:200px">

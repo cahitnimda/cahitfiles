@@ -2415,50 +2415,58 @@
   }
   function normalizeEditorSpacing(editor) {
     if (!editor) return;
-    var temp = document.createElement('div');
-    temp.innerHTML = editor.innerHTML;
-    Array.prototype.forEach.call(temp.querySelectorAll('*'), function(el) {
-      if (el.hasAttribute('style')) el.removeAttribute('style');
-      if (el.hasAttribute('align')) el.removeAttribute('align');
-    });
-    Array.prototype.forEach.call(temp.querySelectorAll('div'), function(div) {
-      var p = document.createElement('p');
-      while (div.firstChild) p.appendChild(div.firstChild);
-      div.parentNode.replaceChild(p, div);
-    });
-    Array.prototype.forEach.call(temp.querySelectorAll('p'), function(p) {
-      var hasContent = (p.textContent || '').replace(/\u00a0/g, '').trim().length > 0
-        || p.querySelector('img,iframe,br + *');
-      if (!hasContent) p.parentNode.removeChild(p);
-    });
-    var html = temp.innerHTML
-      .replace(/(<br\s*\/?>\s*){2,}/gi, '</p><p>')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/[ \t]+/g, ' ')
-      .replace(/<p>\s*<\/p>/gi, '');
-    var wrapper = document.createElement('div');
-    wrapper.innerHTML = html;
-    var children = Array.prototype.slice.call(wrapper.childNodes);
-    var pendingP = null;
-    children.forEach(function(node) {
-      var isBlock = node.nodeType === 1 && /^(P|H[1-6]|UL|OL|BLOCKQUOTE|PRE|FIGURE|TABLE|HR)$/.test(node.tagName);
-      if (isBlock) {
-        pendingP = null;
-      } else {
-        if (!pendingP) {
-          pendingP = document.createElement('p');
-          wrapper.insertBefore(pendingP, node);
+    try {
+      var temp = document.createElement('div');
+      temp.innerHTML = editor.innerHTML;
+      Array.prototype.forEach.call(temp.querySelectorAll('*'), function(el) {
+        if (el.hasAttribute('style')) el.removeAttribute('style');
+        if (el.hasAttribute('align')) el.removeAttribute('align');
+        if (el.hasAttribute('class')) el.removeAttribute('class');
+      });
+      Array.prototype.forEach.call(temp.querySelectorAll('span,font'), function(el) {
+        var parent = el.parentNode;
+        while (el.firstChild) parent.insertBefore(el.firstChild, el);
+        parent.removeChild(el);
+      });
+      Array.prototype.forEach.call(temp.querySelectorAll('div'), function(div) {
+        var p = document.createElement('p');
+        while (div.firstChild) p.appendChild(div.firstChild);
+        div.parentNode.replaceChild(p, div);
+      });
+      var html = temp.innerHTML
+        .replace(/&nbsp;/g, ' ')
+        .replace(/<br\s*\/?>(\s*<br\s*\/?>)+/gi, '</p><p>')
+        .replace(/<br\s*\/?>/gi, '</p><p>')
+        .replace(/<p>\s*<\/p>/gi, '')
+        .replace(/[ \t]+/g, ' ');
+      var wrapper = document.createElement('div');
+      wrapper.innerHTML = html;
+      var children = Array.prototype.slice.call(wrapper.childNodes);
+      var pendingP = null;
+      children.forEach(function(node) {
+        var isBlock = node.nodeType === 1 && /^(P|H[1-6]|UL|OL|BLOCKQUOTE|PRE|FIGURE|TABLE|HR)$/.test(node.tagName);
+        if (isBlock) {
+          pendingP = null;
+        } else {
+          if (node.nodeType === 3 && !node.textContent.trim()) return;
+          if (!pendingP) {
+            pendingP = document.createElement('p');
+            wrapper.insertBefore(pendingP, node);
+          }
+          pendingP.appendChild(node);
         }
-        pendingP.appendChild(node);
-      }
-    });
-    Array.prototype.forEach.call(wrapper.querySelectorAll('p'), function(p) {
-      var hasContent = (p.textContent || '').replace(/\u00a0/g, '').trim().length > 0
-        || p.querySelector('img,iframe');
-      if (!hasContent) p.parentNode.removeChild(p);
-    });
-    editor.innerHTML = wrapper.innerHTML;
-    showToast('Spacing normalized', 'success');
+      });
+      Array.prototype.forEach.call(wrapper.querySelectorAll('p'), function(p) {
+        var hasContent = (p.textContent || '').replace(/\u00a0/g, '').trim().length > 0
+          || p.querySelector('img,iframe');
+        if (!hasContent) p.parentNode.removeChild(p);
+      });
+      editor.innerHTML = wrapper.innerHTML || '<p><br></p>';
+      if (typeof showToast === 'function') showToast('Spacing normalized', 'success');
+    } catch (err) {
+      console.error('normalizeEditorSpacing failed:', err);
+      if (typeof showToast === 'function') showToast('Could not normalize spacing', 'error');
+    }
   }
   window.openBlogEditor = function(post) {
     var overlay = document.createElement('div');

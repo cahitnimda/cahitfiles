@@ -2413,6 +2413,53 @@
     if (/<\/?(p|div|br|h[1-6]|ul|ol|li|img|a|strong|em|b|i|u|blockquote)\b/i.test(s)) return s;
     return s.split(/\n\n+/).map(function(p) { return '<p>' + p.replace(/\n/g, '<br>') + '</p>'; }).join('');
   }
+  function normalizeEditorSpacing(editor) {
+    if (!editor) return;
+    var temp = document.createElement('div');
+    temp.innerHTML = editor.innerHTML;
+    Array.prototype.forEach.call(temp.querySelectorAll('*'), function(el) {
+      if (el.hasAttribute('style')) el.removeAttribute('style');
+      if (el.hasAttribute('align')) el.removeAttribute('align');
+    });
+    Array.prototype.forEach.call(temp.querySelectorAll('div'), function(div) {
+      var p = document.createElement('p');
+      while (div.firstChild) p.appendChild(div.firstChild);
+      div.parentNode.replaceChild(p, div);
+    });
+    Array.prototype.forEach.call(temp.querySelectorAll('p'), function(p) {
+      var hasContent = (p.textContent || '').replace(/\u00a0/g, '').trim().length > 0
+        || p.querySelector('img,iframe,br + *');
+      if (!hasContent) p.parentNode.removeChild(p);
+    });
+    var html = temp.innerHTML
+      .replace(/(<br\s*\/?>\s*){2,}/gi, '</p><p>')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/<p>\s*<\/p>/gi, '');
+    var wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+    var children = Array.prototype.slice.call(wrapper.childNodes);
+    var pendingP = null;
+    children.forEach(function(node) {
+      var isBlock = node.nodeType === 1 && /^(P|H[1-6]|UL|OL|BLOCKQUOTE|PRE|FIGURE|TABLE|HR)$/.test(node.tagName);
+      if (isBlock) {
+        pendingP = null;
+      } else {
+        if (!pendingP) {
+          pendingP = document.createElement('p');
+          wrapper.insertBefore(pendingP, node);
+        }
+        pendingP.appendChild(node);
+      }
+    });
+    Array.prototype.forEach.call(wrapper.querySelectorAll('p'), function(p) {
+      var hasContent = (p.textContent || '').replace(/\u00a0/g, '').trim().length > 0
+        || p.querySelector('img,iframe');
+      if (!hasContent) p.parentNode.removeChild(p);
+    });
+    editor.innerHTML = wrapper.innerHTML;
+    showToast('Spacing normalized', 'success');
+  }
   window.openBlogEditor = function(post) {
     var overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -2443,6 +2490,7 @@
             '<button type="button" data-cmd="insertImage" title="Insert image">🖼 Image</button>' +
             '<button type="button" data-cmd="uploadImage" title="Upload image">📤 Upload</button>' +
             '<span class="rte-sep"></span>' +
+            '<button type="button" data-cmd="normalizeSpacing" title="Make all paragraph spacing equal">⇅ Even Spacing</button>' +
             '<button type="button" data-cmd="removeFormat" title="Clear formatting">✕ Clear</button>' +
           '</div>' +
           '<div class="rte-editor" id="bp-content" data-testid="input-blog-content" contenteditable="true" data-placeholder="Write your blog post here...">' + (post ? rteInitialHtml(post.content || '') : '') + '</div>' +
@@ -2464,6 +2512,7 @@
             '<button type="button" data-cmd="insertImage" title="Insert image">🖼 Image</button>' +
             '<button type="button" data-cmd="uploadImage" title="Upload image">📤 Upload</button>' +
             '<span class="rte-sep"></span>' +
+            '<button type="button" data-cmd="normalizeSpacing" title="Make all paragraph spacing equal">⇅ Even Spacing</button>' +
             '<button type="button" data-cmd="removeFormat" title="Clear formatting">✕ Clear</button>' +
           '</div>' +
           '<div class="rte-editor" id="bp-content-ar" data-testid="input-blog-content-ar" contenteditable="true" dir="rtl" data-placeholder="اكتب محتوى المدونة هنا...">' + (post ? rteInitialHtml(post.content_ar || '') : '') + '</div>' +
@@ -2579,6 +2628,8 @@
             fi.click();
           } else if (cmd === 'formatBlock') {
             document.execCommand('formatBlock', false, val);
+          } else if (cmd === 'normalizeSpacing') {
+            normalizeEditorSpacing(editor);
           } else {
             document.execCommand(cmd, false, val);
           }

@@ -1099,8 +1099,47 @@ app.post('/admin/api/leads', express.json(), async (req, res) => {
   }
 });
 
+// Admin auth guard for blog routes
+function requireAdminAuth(req, res, next) {
+  const auth = req.headers.authorization || '';
+  const token = auth.replace('Bearer ', '');
+  if (!token || (!adminTokens.has(token) && !verifyAdminToken(token))) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  next();
+}
+
+// Plain-text HTML escaper for non-RTE fields (title, excerpt, attribute values)
+function escapeHtmlSafe(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// HTML sanitizer for blog content (allowlist of safe tags/attributes)
+function sanitizeBlogHtml(html) {
+  if (!html || typeof html !== 'string') return '';
+  let s = html;
+  // Strip script/style/iframe/object/embed/form blocks entirely
+  s = s.replace(/<\s*(script|style|iframe|object|embed|form|input|button|textarea|select|link|meta)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, '');
+  s = s.replace(/<\s*(script|style|iframe|object|embed|form|input|button|textarea|select|link|meta)\b[^>]*\/?>/gi, '');
+  // Strip on* event-handler attributes (quoted, single-quoted, AND unquoted)
+  s = s.replace(/\s+on[a-z]+\s*=\s*"[^"]*"/gi, '');
+  s = s.replace(/\s+on[a-z]+\s*=\s*'[^']*'/gi, '');
+  s = s.replace(/\s+on[a-z]+\s*=\s*[^\s>]+/gi, '');
+  // Strip dangerous URL schemes in href/src — quoted, single-quoted, and unquoted
+  s = s.replace(/(href|src)\s*=\s*"\s*(?:javascript|vbscript|data)\s*:[^"]*"/gi, '$1="#"');
+  s = s.replace(/(href|src)\s*=\s*'\s*(?:javascript|vbscript|data)\s*:[^']*'/gi, "$1='#'");
+  s = s.replace(/(href|src)\s*=\s*(?:javascript|vbscript|data)\s*:[^\s>]*/gi, '$1="#"');
+  return s;
+}
+
 // Blog Posts CRUD
-app.get('/admin/api/blog-posts', async (req, res) => {
+app.get('/admin/api/blog-posts', requireAdminAuth, async (req, res) => {
   try {
     if (dbPool) {
       const r = await dbQuery('SELECT * FROM blog_posts ORDER BY created_at DESC');
@@ -1111,14 +1150,16 @@ app.get('/admin/api/blog-posts', async (req, res) => {
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
 
-app.post('/admin/api/blog-posts', express.json(), async (req, res) => {
+app.post('/admin/api/blog-posts', requireAdminAuth, express.json({ limit: '5mb' }), async (req, res) => {
   try {
     const { title, title_ar, excerpt, excerpt_ar, content, content_ar, slug, image_url, status } = req.body;
-    const postSlug = slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const postSlug = slug || (title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const cleanContent = sanitizeBlogHtml(content || '');
+    const cleanContentAr = sanitizeBlogHtml(content_ar || '');
     if (dbPool) {
       const r = await dbQuery(
         'INSERT INTO blog_posts (title, title_ar, excerpt, excerpt_ar, content, content_ar, slug, image_url, status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
-        [title || '', title_ar || '', excerpt || '', excerpt_ar || '', content || '', content_ar || '', postSlug, image_url || '', status || 'published']
+        [title || '', title_ar || '', excerpt || '', excerpt_ar || '', cleanContent, cleanContentAr, postSlug, image_url || '', status || 'published']
       );
       res.json({ success: true, data: r.rows[0] });
     } else {
@@ -1127,14 +1168,16 @@ app.post('/admin/api/blog-posts', express.json(), async (req, res) => {
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
 
-app.patch('/admin/api/blog-posts/:id', express.json(), async (req, res) => {
+app.patch('/admin/api/blog-posts/:id', requireAdminAuth, express.json({ limit: '5mb' }), async (req, res) => {
   try {
     const { id } = req.params;
     const { title, title_ar, excerpt, excerpt_ar, content, content_ar, slug, image_url, status } = req.body;
+    const cleanContent = content != null ? sanitizeBlogHtml(content) : null;
+    const cleanContentAr = content_ar != null ? sanitizeBlogHtml(content_ar) : null;
     if (dbPool) {
       const r = await dbQuery(
         'UPDATE blog_posts SET title=COALESCE($1,title), title_ar=COALESCE($2,title_ar), excerpt=COALESCE($3,excerpt), excerpt_ar=COALESCE($4,excerpt_ar), content=COALESCE($5,content), content_ar=COALESCE($6,content_ar), slug=COALESCE($7,slug), image_url=COALESCE($8,image_url), status=COALESCE($9,status), updated_at=NOW() WHERE id=$10 RETURNING *',
-        [title, title_ar, excerpt, excerpt_ar, content, content_ar, slug, image_url, status, id]
+        [title, title_ar, excerpt, excerpt_ar, cleanContent, cleanContentAr, slug, image_url, status, id]
       );
       res.json({ success: true, data: r.rows[0] });
     } else {
@@ -1143,7 +1186,7 @@ app.patch('/admin/api/blog-posts/:id', express.json(), async (req, res) => {
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
 
-app.delete('/admin/api/blog-posts/:id', async (req, res) => {
+app.delete('/admin/api/blog-posts/:id', requireAdminAuth, async (req, res) => {
   try {
     if (dbPool) {
       await dbQuery('DELETE FROM blog_posts WHERE id=$1', [req.params.id]);
@@ -1359,13 +1402,19 @@ app.get('/blog', async (req, res) => {
       if (r.rows.length > 0) {
         let postsHtml = '';
         r.rows.forEach(p => {
+          const safeTitle = escapeHtmlSafe(p.title);
+          const safeTitleAr = escapeHtmlSafe(p.title_ar);
+          const safeExcerpt = escapeHtmlSafe(p.excerpt);
+          const safeExcerptAr = escapeHtmlSafe(p.excerpt_ar);
+          const safeImg = encodeURI(p.image_url || '');
+          const safeSlug = encodeURIComponent(p.slug || '');
           postsHtml += `<div class="blog-card" data-testid="card-blog-${p.id}">
-            ${p.image_url ? '<div class="blog-card-image"><img src="' + p.image_url + '" alt="' + (p.title || '').replace(/"/g,'&quot;') + '" /></div>' : '<div class="blog-card-image"><div style="height:200px;background:linear-gradient(135deg,#0A3D6B,#0ea5e9);display:flex;align-items:center;justify-content:center;color:#fff;font-size:2rem;font-weight:700">' + (p.title || '')[0] + '</div></div>'}
+            ${p.image_url ? '<div class="blog-card-image"><img src="' + safeImg + '" alt="' + safeTitle + '" /></div>' : '<div class="blog-card-image"><div style="height:200px;background:linear-gradient(135deg,#0A3D6B,#0ea5e9);display:flex;align-items:center;justify-content:center;color:#fff;font-size:2rem;font-weight:700">' + escapeHtmlSafe((p.title || '')[0]) + '</div></div>'}
             <div class="blog-card-content">
               <span class="blog-card-date">${new Date(p.created_at).toLocaleDateString('en-US',{year:'numeric',month:'long'})}</span>
-              <h3 class="blog-card-title" ${p.title_ar ? 'data-ar="'+p.title_ar.replace(/"/g,'&quot;')+'"' : ''}>${p.title}</h3>
-              <p class="blog-card-excerpt" ${p.excerpt_ar ? 'data-ar="'+p.excerpt_ar.replace(/"/g,'&quot;')+'"' : ''}>${p.excerpt || ''}</p>
-              <a href="/blog/${p.slug}" class="service-card-link" data-ar="اقرأ المزيد">Read More <svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+              <h3 class="blog-card-title" ${p.title_ar ? 'data-ar="'+safeTitleAr+'"' : ''}>${safeTitle}</h3>
+              <p class="blog-card-excerpt" ${p.excerpt_ar ? 'data-ar="'+safeExcerptAr+'"' : ''}>${safeExcerpt}</p>
+              <a href="/blog/${safeSlug}" class="service-card-link" data-ar="اقرأ المزيد">Read More <svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
             </div>
           </div>`;
         });
@@ -1398,17 +1447,20 @@ app.get('/blog/:slug', async (req, res) => {
     const footerContent = readThemeFile('footer.php');
     let header = executePhpTemplate(headerContent, 'blog');
     let footer = executePhpTemplate(footerContent, 'blog');
+    const safePostTitle = escapeHtmlSafe(post.title);
+    const safePostImg = encodeURI(post.image_url || '');
+    const safePostContent = post.content ? sanitizeBlogHtml(post.content) : escapeHtmlSafe(post.excerpt || '');
     const postHtml = `
       <section class="hero-banner" style="min-height:200px">
         <div class="container text-center" style="padding-top:120px;padding-bottom:40px">
-          <h1 class="hero-banner-title hero-banner-title-lg">${post.title}</h1>
+          <h1 class="hero-banner-title hero-banner-title-lg">${safePostTitle}</h1>
           <p class="hero-banner-subtitle">${new Date(post.created_at).toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'})}</p>
         </div>
       </section>
       <section class="section bg-white">
         <div class="container" style="max-width:800px;margin:0 auto">
-          ${post.image_url ? '<img src="' + post.image_url + '" style="width:100%;border-radius:12px;margin-bottom:2rem" alt="' + post.title + '" />' : ''}
-          <div class="blog-post-content" style="font-size:1.05rem;line-height:1.8;color:#334155">${post.content || post.excerpt || ''}</div>
+          ${post.image_url ? '<img src="' + safePostImg + '" style="width:100%;border-radius:12px;margin-bottom:2rem" alt="' + safePostTitle + '" />' : ''}
+          <div class="blog-post-content" style="font-size:1.05rem;line-height:1.8;color:#334155">${safePostContent}</div>
           <div style="margin-top:3rem;padding-top:2rem;border-top:1px solid #e2e8f0">
             <a href="/blog" class="service-card-link" style="font-size:1rem">&larr; Back to Blog</a>
           </div>

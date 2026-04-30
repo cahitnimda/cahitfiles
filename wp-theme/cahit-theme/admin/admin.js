@@ -2407,6 +2407,12 @@
     }).then(function(r) { return r.json(); });
   }
 
+  function rteInitialHtml(text) {
+    if (!text) return '';
+    var s = String(text);
+    if (/<\/?(p|div|br|h[1-6]|ul|ol|li|img|a|strong|em|b|i|u|blockquote)\b/i.test(s)) return s;
+    return s.split(/\n\n+/).map(function(p) { return '<p>' + p.replace(/\n/g, '<br>') + '</p>'; }).join('');
+  }
   window.openBlogEditor = function(post) {
     var overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -2420,8 +2426,48 @@
         '<div class="form-group"><label class="form-label">Title (Arabic)</label><input class="form-input" id="bp-title-ar" data-testid="input-blog-title-ar" value="' + (post ? (post.title_ar || '').replace(/"/g,'&quot;') : '') + '" dir="rtl" /></div>' +
         '<div class="form-group"><label class="form-label">Excerpt (English)</label><textarea class="form-textarea" id="bp-excerpt" data-testid="input-blog-excerpt" rows="2">' + (post ? (post.excerpt || '') : '') + '</textarea></div>' +
         '<div class="form-group"><label class="form-label">Excerpt (Arabic)</label><textarea class="form-textarea" id="bp-excerpt-ar" data-testid="input-blog-excerpt-ar" rows="2" dir="rtl">' + (post ? (post.excerpt_ar || '') : '') + '</textarea></div>' +
-        '<div class="form-group"><label class="form-label">Content (English)</label><textarea class="form-textarea" id="bp-content" data-testid="input-blog-content" rows="8">' + (post ? (post.content || '') : '') + '</textarea></div>' +
-        '<div class="form-group"><label class="form-label">Content (Arabic)</label><textarea class="form-textarea" id="bp-content-ar" data-testid="input-blog-content-ar" rows="8" dir="rtl">' + (post ? (post.content_ar || '') : '') + '</textarea></div>' +
+        '<div class="form-group"><label class="form-label">Content (English)</label>' +
+          '<div class="rte-toolbar" data-target="bp-content">' +
+            '<button type="button" data-cmd="bold" title="Bold"><b>B</b></button>' +
+            '<button type="button" data-cmd="italic" title="Italic"><i>I</i></button>' +
+            '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>' +
+            '<span class="rte-sep"></span>' +
+            '<button type="button" data-cmd="formatBlock" data-val="h2" title="Heading">H2</button>' +
+            '<button type="button" data-cmd="formatBlock" data-val="h3" title="Subheading">H3</button>' +
+            '<button type="button" data-cmd="formatBlock" data-val="p" title="Paragraph">P</button>' +
+            '<span class="rte-sep"></span>' +
+            '<button type="button" data-cmd="insertUnorderedList" title="Bullet list">&bull; List</button>' +
+            '<button type="button" data-cmd="insertOrderedList" title="Numbered list">1. List</button>' +
+            '<span class="rte-sep"></span>' +
+            '<button type="button" data-cmd="createLink" title="Insert link">🔗 Link</button>' +
+            '<button type="button" data-cmd="insertImage" title="Insert image">🖼 Image</button>' +
+            '<button type="button" data-cmd="uploadImage" title="Upload image">📤 Upload</button>' +
+            '<span class="rte-sep"></span>' +
+            '<button type="button" data-cmd="removeFormat" title="Clear formatting">✕ Clear</button>' +
+          '</div>' +
+          '<div class="rte-editor" id="bp-content" data-testid="input-blog-content" contenteditable="true" data-placeholder="Write your blog post here...">' + (post ? rteInitialHtml(post.content || '') : '') + '</div>' +
+        '</div>' +
+        '<div class="form-group"><label class="form-label">Content (Arabic)</label>' +
+          '<div class="rte-toolbar" data-target="bp-content-ar">' +
+            '<button type="button" data-cmd="bold" title="Bold"><b>B</b></button>' +
+            '<button type="button" data-cmd="italic" title="Italic"><i>I</i></button>' +
+            '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>' +
+            '<span class="rte-sep"></span>' +
+            '<button type="button" data-cmd="formatBlock" data-val="h2" title="Heading">H2</button>' +
+            '<button type="button" data-cmd="formatBlock" data-val="h3" title="Subheading">H3</button>' +
+            '<button type="button" data-cmd="formatBlock" data-val="p" title="Paragraph">P</button>' +
+            '<span class="rte-sep"></span>' +
+            '<button type="button" data-cmd="insertUnorderedList" title="Bullet list">&bull; List</button>' +
+            '<button type="button" data-cmd="insertOrderedList" title="Numbered list">1. List</button>' +
+            '<span class="rte-sep"></span>' +
+            '<button type="button" data-cmd="createLink" title="Insert link">🔗 Link</button>' +
+            '<button type="button" data-cmd="insertImage" title="Insert image">🖼 Image</button>' +
+            '<button type="button" data-cmd="uploadImage" title="Upload image">📤 Upload</button>' +
+            '<span class="rte-sep"></span>' +
+            '<button type="button" data-cmd="removeFormat" title="Clear formatting">✕ Clear</button>' +
+          '</div>' +
+          '<div class="rte-editor" id="bp-content-ar" data-testid="input-blog-content-ar" contenteditable="true" dir="rtl" data-placeholder="اكتب محتوى المدونة هنا...">' + (post ? rteInitialHtml(post.content_ar || '') : '') + '</div>' +
+        '</div>' +
         '<div class="form-group"><label class="form-label">Featured Image</label>' +
           '<div style="display:flex;gap:8px;align-items:flex-start">' +
             '<input class="form-input" id="bp-image" data-testid="input-blog-image" value="' + (post ? (post.image_url || '').replace(/"/g,'&quot;') : '') + '" placeholder="Image URL" style="flex:1" />' +
@@ -2497,6 +2543,71 @@
     '</div>';
     document.body.appendChild(overlay);
 
+    Array.prototype.forEach.call(overlay.querySelectorAll('.rte-toolbar'), function(toolbar) {
+      var targetId = toolbar.getAttribute('data-target');
+      var editor = document.getElementById(targetId);
+      Array.prototype.forEach.call(toolbar.querySelectorAll('button[data-cmd]'), function(btn) {
+        btn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          var cmd = btn.getAttribute('data-cmd');
+          var val = btn.getAttribute('data-val') || null;
+          editor.focus();
+          if (cmd === 'createLink') {
+            var url = prompt('Enter URL:', 'https://');
+            if (url) document.execCommand('createLink', false, url);
+          } else if (cmd === 'insertImage') {
+            var imgUrl = prompt('Image URL:', 'https://');
+            if (imgUrl) document.execCommand('insertImage', false, imgUrl);
+          } else if (cmd === 'uploadImage') {
+            var fi = document.createElement('input');
+            fi.type = 'file';
+            fi.accept = 'image/*';
+            fi.onchange = function() {
+              var f = fi.files[0]; if (!f) return;
+              var rteToken = sessionStorage.getItem('cahit_admin_token') || localStorage.getItem('cahit_admin_token');
+              var fd = new FormData(); fd.append('file', f);
+              fetch('/admin/api/upload', { method: 'POST', headers: { 'Authorization': 'Bearer ' + rteToken }, body: fd })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                  if (d.success && d.url) {
+                    editor.focus();
+                    document.execCommand('insertImage', false, d.url);
+                  } else { showToast(d.message || d.error || 'Upload failed', 'error'); }
+                }).catch(function() { showToast('Upload failed', 'error'); });
+            };
+            fi.click();
+          } else if (cmd === 'formatBlock') {
+            document.execCommand('formatBlock', false, val);
+          } else {
+            document.execCommand(cmd, false, val);
+          }
+        });
+      });
+      editor.addEventListener('paste', function(e) {
+        var items = (e.clipboardData || window.clipboardData).items;
+        if (items) {
+          for (var i = 0; i < items.length; i++) {
+            if (items[i].type && items[i].type.indexOf('image') === 0) {
+              e.preventDefault();
+              var file = items[i].getAsFile();
+              var rteToken = sessionStorage.getItem('cahit_admin_token') || localStorage.getItem('cahit_admin_token');
+              var fd = new FormData(); fd.append('file', file);
+              fetch('/admin/api/upload', { method: 'POST', headers: { 'Authorization': 'Bearer ' + rteToken }, body: fd })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                  if (d.success && d.url) {
+                    editor.focus();
+                    document.execCommand('insertImage', false, d.url);
+                  }
+                }).catch(function() {});
+              return;
+            }
+          }
+        }
+      });
+    });
+
     var imgInput = document.getElementById('bp-image');
     function updateImagePreview() {
       var prev = document.getElementById('bp-image-preview');
@@ -2552,8 +2663,17 @@
       showAiLoading('Generating SEO data...');
       aiBlogCall('seo-meta', topic, 'en').then(function(d) { d.success ? showAiOutput(d.content) : showAiError(d.error); }).catch(function() { showAiError('Failed to generate'); });
     });
+    function rteText(id) { var el = document.getElementById(id); return el ? (el.innerText || '').trim() : ''; }
+    function rteHtml(id) { var el = document.getElementById(id); return el ? (el.innerHTML || '').trim() : ''; }
+    function rteSetHtml(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
+    function plainToHtml(text) {
+      if (!text) return '';
+      if (text.indexOf('<') !== -1 && text.indexOf('>') !== -1) return text;
+      return text.split(/\n\n+/).map(function(p) { return '<p>' + p.replace(/\n/g, '<br>') + '</p>'; }).join('');
+    }
+
     document.getElementById('ai-translate-ar').addEventListener('click', function() {
-      var content = document.getElementById('bp-content').value.trim();
+      var content = rteText('bp-content');
       var title = document.getElementById('bp-title').value.trim();
       var excerpt = document.getElementById('bp-excerpt').value.trim();
       if (!content && !title) { showToast('Write English content first', 'error'); return; }
@@ -2568,22 +2688,22 @@
           var contentMatch = parts.match(/CONTENT:\s*([\s\S]+)/i) || parts.match(/المحتوى:\s*([\s\S]+)/i);
           if (titleMatch) document.getElementById('bp-title-ar').value = titleMatch[1].trim();
           if (excerptMatch) document.getElementById('bp-excerpt-ar').value = excerptMatch[1].trim();
-          if (contentMatch) document.getElementById('bp-content-ar').value = contentMatch[1].trim();
+          if (contentMatch) rteSetHtml('bp-content-ar', plainToHtml(contentMatch[1].trim()));
           else if (!titleMatch && !excerptMatch) {
-            document.getElementById('bp-content-ar').value = d.content.trim();
+            rteSetHtml('bp-content-ar', plainToHtml(d.content.trim()));
           }
           showToast('Arabic fields filled', 'success');
         } else { showAiError(d.error); }
       }).catch(function() { showAiError('Translation failed'); });
     });
     document.getElementById('ai-translate-en').addEventListener('click', function() {
-      var content = document.getElementById('bp-content-ar').value.trim();
+      var content = rteText('bp-content-ar');
       if (!content) { showToast('Write Arabic content first', 'error'); return; }
       showAiLoading('Translating to English...');
       aiBlogCall('translate', '', 'en', content).then(function(d) { d.success ? showAiOutput(d.content) : showAiError(d.error); }).catch(function() { showAiError('Translation failed'); });
     });
     document.getElementById('ai-improve').addEventListener('click', function() {
-      var content = document.getElementById('bp-content').value.trim();
+      var content = rteText('bp-content');
       if (!content) { showToast('Write content first to improve', 'error'); return; }
       showAiLoading('Improving content...');
       aiBlogCall('improve', '', 'en', content).then(function(d) { d.success ? showAiOutput(d.content) : showAiError(d.error); }).catch(function() { showAiError('Improvement failed'); });
@@ -2621,7 +2741,7 @@
       showToast('Title set', 'success');
     });
     document.getElementById('ai-use-content').addEventListener('click', function() {
-      document.getElementById('bp-content').value = document.getElementById('ai-output').value.trim();
+      rteSetHtml('bp-content', plainToHtml(document.getElementById('ai-output').value.trim()));
       showToast('Content set', 'success');
     });
     document.getElementById('ai-use-excerpt').addEventListener('click', function() {
@@ -2636,8 +2756,8 @@
         title_ar: document.getElementById('bp-title-ar').value.trim(),
         excerpt: document.getElementById('bp-excerpt').value.trim(),
         excerpt_ar: document.getElementById('bp-excerpt-ar').value.trim(),
-        content: document.getElementById('bp-content').value.trim(),
-        content_ar: document.getElementById('bp-content-ar').value.trim(),
+        content: rteHtml('bp-content'),
+        content_ar: rteHtml('bp-content-ar'),
         image_url: document.getElementById('bp-image').value.trim(),
         slug: document.getElementById('bp-slug').value.trim(),
         status: 'published'
@@ -2647,7 +2767,8 @@
       var method = id ? 'PATCH' : 'POST';
       this.disabled = true;
       this.textContent = 'Saving...';
-      fetch(url, { method: method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
+      var saveToken = sessionStorage.getItem('cahit_admin_token') || localStorage.getItem('cahit_admin_token');
+      fetch(url, { method: method, headers: {'Content-Type':'application/json', 'Authorization': 'Bearer ' + saveToken}, body: JSON.stringify(body) })
         .then(function(r) { return r.json(); })
         .then(function(d) {
           if (d.success) {
@@ -2670,7 +2791,8 @@
 
   window.deleteBlogPost = function(id) {
     if (!confirm('Delete this blog post?')) return;
-    fetch('/admin/api/blog-posts/' + id, { method: 'DELETE' })
+    var delToken = sessionStorage.getItem('cahit_admin_token') || localStorage.getItem('cahit_admin_token');
+    fetch('/admin/api/blog-posts/' + id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + delToken } })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (d.success) { showToast('Post deleted', 'success'); loadBlogPosts(); }
@@ -2679,7 +2801,8 @@
   };
 
   function loadBlogPosts() {
-    fetch('/admin/api/blog-posts').then(function(r) { return r.json(); }).then(function(d) {
+    var loadToken = sessionStorage.getItem('cahit_admin_token') || localStorage.getItem('cahit_admin_token');
+    fetch('/admin/api/blog-posts', { headers: { 'Authorization': 'Bearer ' + loadToken } }).then(function(r) { return r.json(); }).then(function(d) {
       if (d.success) { state.blogPosts = d.data || []; if (state.currentPage === 'blog') renderPage('blog'); }
     }).catch(function() {});
   }

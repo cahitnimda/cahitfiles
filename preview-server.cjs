@@ -901,8 +901,17 @@ app.post('/admin/api/ai-blog-image', express.json(), async (req, res) => {
       throw new Error('No image data returned');
     }
 
-    const dataUrl = 'data:' + mime + ';base64,' + buffer.toString('base64');
-    res.json({ success: true, url: dataUrl });
+    if (dbPool) {
+      const ins = await dbQuery('INSERT INTO blog_images (mime_type, data) VALUES ($1, $2) RETURNING id', [mime, buffer]);
+      const imgId = ins.rows[0].id;
+      res.json({ success: true, url: '/blog-image/' + imgId });
+    } else {
+      try { if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch (e) {}
+      const ext = mime === 'image/jpeg' ? '.jpg' : mime === 'image/webp' ? '.webp' : mime === 'image/gif' ? '.gif' : '.png';
+      const safeName = 'ai-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
+      fs.writeFileSync(path.join(UPLOADS_DIR, safeName), buffer);
+      res.json({ success: true, url: '/uploads/' + safeName });
+    }
   } catch (err) {
     console.error('AI image generation error:', err.message || err);
     res.json({ success: false, error: err.message || 'Image generation failed' });
@@ -974,6 +983,23 @@ const UPLOADS_DIR = process.env.VERCEL ? '/tmp/uploads' : path.join(THEME_DIR, '
 try { if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch (e) {}
 
 app.use('/uploads', express.static(UPLOADS_DIR));
+
+app.get('/blog-image/:id', async (req, res) => {
+  if (!dbPool) return res.status(404).send('Not found');
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).send('Bad id');
+    const r = await dbQuery('SELECT mime_type, data FROM blog_images WHERE id=$1', [id]);
+    if (!r.rows.length) return res.status(404).send('Not found');
+    const row = r.rows[0];
+    res.setHeader('Content-Type', row.mime_type || 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.end(row.data);
+  } catch (e) {
+    console.error('blog-image error:', e.message);
+    res.status(500).send('Error');
+  }
+});
 
 app.post('/admin/api/upload', (req, res) => {
   const auth = req.headers.authorization || '';
@@ -1684,6 +1710,7 @@ async function initDatabase() {
     await dbQuery(`CREATE TABLE IF NOT EXISTS chatbot_knowledge (id SERIAL PRIMARY KEY, title VARCHAR(500) NOT NULL DEFAULT '', content TEXT NOT NULL DEFAULT '', sort_order INT DEFAULT 0, created_at TIMESTAMP DEFAULT NOW())`);
     await dbQuery(`CREATE TABLE IF NOT EXISTS leads (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL DEFAULT '', email VARCHAR(255) NOT NULL DEFAULT '', phone VARCHAR(100) DEFAULT '', service_type VARCHAR(255) DEFAULT '', details TEXT DEFAULT '', status VARCHAR(50) DEFAULT 'new', created_at TIMESTAMP DEFAULT NOW())`);
     await dbQuery(`CREATE TABLE IF NOT EXISTS blog_posts (id SERIAL PRIMARY KEY, title VARCHAR(500) NOT NULL DEFAULT '', title_ar VARCHAR(500) DEFAULT '', excerpt TEXT DEFAULT '', excerpt_ar TEXT DEFAULT '', content TEXT DEFAULT '', content_ar TEXT DEFAULT '', slug VARCHAR(255) UNIQUE, image_url TEXT DEFAULT '', status VARCHAR(50) DEFAULT 'published', created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW())`);
+    await dbQuery(`CREATE TABLE IF NOT EXISTS blog_images (id SERIAL PRIMARY KEY, mime_type VARCHAR(100) NOT NULL DEFAULT 'image/png', data BYTEA NOT NULL, created_at TIMESTAMP DEFAULT NOW())`);
     await dbQuery(`CREATE TABLE IF NOT EXISTS page_views (id SERIAL PRIMARY KEY, page VARCHAR(500) NOT NULL, referrer VARCHAR(1000) DEFAULT '', user_agent TEXT DEFAULT '', session_id VARCHAR(100) DEFAULT '', ip VARCHAR(100) DEFAULT '', created_at TIMESTAMP DEFAULT NOW())`);
     await dbQuery(`CREATE INDEX IF NOT EXISTS idx_page_views_created ON page_views(created_at)`);
     await dbQuery(`CREATE INDEX IF NOT EXISTS idx_page_views_page ON page_views(page)`);

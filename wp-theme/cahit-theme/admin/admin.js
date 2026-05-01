@@ -61,26 +61,29 @@
     }).catch(function() {});
   }
 
-  function loadMediaFromServer() {
+  function loadMediaFromServer(cb) {
     var token = sessionStorage.getItem('cahit_admin_token') || localStorage.getItem('cahit_admin_token');
     fetch('/admin/api/uploads', { headers: { 'Authorization': 'Bearer ' + token } })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (d.success && d.files) {
           d.files.forEach(function(f) {
-            var exists = state.mediaItems.some(function(m) { return m.name === f.name || m.url === f.url; });
+            var exists = state.mediaItems.some(function(m) { return m.url === f.url; });
             if (!exists) {
+              var kind = f.kind || (/\.(mp4|mov|webm|avi|m4v|ogv)$/i.test(f.name) ? 'video' : 'image');
               state.mediaItems.push({
                 name: f.name,
-                type: /\.(mp4|mov|webm|avi)$/i.test(f.name) ? 'video' : 'image',
-                size: (f.size / (1024 * 1024)).toFixed(1) + ' MB',
+                type: kind,
+                mime: f.type || '',
+                size: ((f.size || 0) / (1024 * 1024)).toFixed(1) + ' MB',
                 date: f.date || '',
                 url: f.url
               });
             }
           });
         }
-      }).catch(function() {});
+        if (typeof cb === 'function') cb();
+      }).catch(function() { if (typeof cb === 'function') cb(); });
   }
 
   function loadSiteSettings() {
@@ -152,7 +155,7 @@
       case 'pages': content.innerHTML = renderPages(); bindPageActions(); break;
       case 'content': content.innerHTML = renderContentEditor(); bindEditorActions(); break;
       case 'cards': content.innerHTML = renderCardManager(); bindCardManagerActions(); break;
-      case 'media': content.innerHTML = renderMedia(); bindMediaActions(); break;
+      case 'media': content.innerHTML = renderMedia(); bindMediaActions(); loadMediaFromServer(function() { if (state.currentPage === 'media') { document.getElementById('mainContent').innerHTML = renderMedia(); bindMediaActions(); } }); break;
       case 'blog': content.innerHTML = renderBlogManager(); loadBlogPosts(); break;
       case 'leads': content.innerHTML = renderLeads(); break;
       case 'analytics': content.innerHTML = renderAnalytics(); loadAnalyticsData(); bindAnalyticsActions(); break;
@@ -1618,11 +1621,22 @@
   function renderMedia() {
     var items = '';
     state.mediaItems.forEach(function(m, i) {
+      var safeUrl = (m.url || '').replace(/"/g, '&quot;');
+      var safeName = (m.name || '').replace(/[<>"]/g, '');
       var thumb = '';
       if (m.type === 'image' && m.url) {
-        thumb = '<img src="' + m.url + '" alt="' + m.name + '" />';
+        thumb = '<img src="' + safeUrl + '" alt="' + safeName + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div style=&quot;width:100%;height:140px;background:#fee2e2;display:flex;align-items:center;justify-content:center;color:#b91c1c;font-size:11px;text-align:center;padding:8px&quot;>Image unavailable</div>\'" />';
       } else if (m.type === 'image' && mediaImages[m.name]) {
-        thumb = '<img src="' + BASE_URL + mediaImages[m.name] + '" alt="' + m.name + '" />';
+        thumb = '<img src="' + BASE_URL + mediaImages[m.name] + '" alt="' + safeName + '" loading="lazy" />';
+      } else if (m.type === 'video' && m.url) {
+        thumb = '<div style="position:relative;width:100%;height:140px;background:#0f172a;overflow:hidden">' +
+          '<video src="' + safeUrl + '#t=0.5" preload="metadata" muted playsinline style="width:100%;height:100%;object-fit:cover;display:block"></video>' +
+          '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">' +
+            '<div style="background:rgba(0,0,0,.55);border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center">' +
+              '<svg width="18" height="18" viewBox="0 0 24 24" fill="#fff" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
       } else if (m.type === 'video') {
         thumb = '<div style="width:100%;height:140px;background:#1e293b;display:flex;align-items:center;justify-content:center;color:#94a3b8">' +
           '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>';
@@ -1630,9 +1644,10 @@
         thumb = '<div style="width:100%;height:140px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;color:#94a3b8">' +
           '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>';
       }
-      var copyBtn = m.url ? '<button class="btn btn-sm btn-outline" onclick="navigator.clipboard.writeText(window.location.origin+\'' + m.url + '\');this.textContent=\'Copied!\';setTimeout(function(){},1000)" style="font-size:11px;padding:2px 6px;margin-top:4px" data-testid="btn-copy-url-' + i + '">Copy URL</button>' : '';
+      var copyBtn = m.url ? '<button class="btn btn-sm btn-outline" onclick="navigator.clipboard.writeText(window.location.origin+\'' + safeUrl + '\');this.textContent=\'Copied!\';setTimeout(function(){},1000)" style="font-size:11px;padding:2px 6px;margin-top:4px" data-testid="btn-copy-url-' + i + '">Copy URL</button>' : '';
+      var openBtn = m.url ? '<a class="btn btn-sm btn-outline" href="' + safeUrl + '" target="_blank" rel="noopener" style="font-size:11px;padding:2px 6px;margin-top:4px;margin-left:4px">Open</a>' : '';
       items += '<div class="media-item" data-testid="media-item-' + i + '">' + thumb +
-        '<div class="media-item-info"><div class="media-item-name">' + m.name + '</div><div class="media-item-size">' + m.size + ' &middot; ' + m.date + '</div>' + copyBtn + '</div></div>';
+        '<div class="media-item-info"><div class="media-item-name">' + safeName + '</div><div class="media-item-size">' + m.size + ' &middot; ' + m.date + '</div>' + copyBtn + openBtn + '</div></div>';
     });
 
     return '' +
@@ -1691,13 +1706,18 @@
         .then(function(d) {
           uploaded++;
           if (d.success) {
+            var mime = d.type || file.type || '';
+            var kind = d.kind || (mime.indexOf('video') === 0 ? 'video' : 'image');
             state.mediaItems.unshift({
               name: d.name || file.name,
-              type: file.type.startsWith('image') ? 'image' : 'video',
+              type: kind,
+              mime: mime,
               size: ((d.size || file.size) / (1024 * 1024)).toFixed(1) + ' MB',
               date: new Date().toISOString().split('T')[0],
               url: d.url
             });
+          } else {
+            showToast(d.message || 'Upload failed', 'error');
           }
           if (uploaded === total) {
             showToast(total + ' file(s) uploaded', 'success');

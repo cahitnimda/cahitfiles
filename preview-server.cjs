@@ -1136,16 +1136,52 @@ app.post('/admin/api/upload', (req, res) => {
   });
 });
 
-app.get('/admin/api/uploads', (req, res) => {
+app.get('/admin/api/uploads', async (req, res) => {
   const auth = req.headers.authorization || '';
   const token = auth.replace('Bearer ', '');
   if (!token || (!adminTokens.has(token) && !verifyAdminToken(token))) {
     return res.status(401).json({ success: false });
   }
-  const files = fs.readdirSync(UPLOADS_DIR).map(name => {
-    const stat = fs.statSync(path.join(UPLOADS_DIR, name));
-    return { name, url: '/uploads/' + name, size: stat.size, date: stat.mtime.toISOString().split('T')[0] };
-  });
+  const files = [];
+  try {
+    if (fs.existsSync(UPLOADS_DIR)) {
+      fs.readdirSync(UPLOADS_DIR).forEach(name => {
+        try {
+          const stat = fs.statSync(path.join(UPLOADS_DIR, name));
+          const ext = (name.split('.').pop() || '').toLowerCase();
+          const isVid = ['mp4','mov','webm','avi','m4v','ogv'].indexOf(ext) !== -1;
+          const isImg = ['png','jpg','jpeg','gif','webp','svg','bmp','avif'].indexOf(ext) !== -1;
+          files.push({
+            name, url: '/uploads/' + name,
+            size: stat.size,
+            date: stat.mtime.toISOString().split('T')[0],
+            type: isVid ? ('video/' + ext) : (isImg ? ('image/' + (ext === 'jpg' ? 'jpeg' : ext)) : 'application/octet-stream'),
+            kind: isVid ? 'video' : (isImg ? 'image' : 'file')
+          });
+        } catch (e) {}
+      });
+    }
+  } catch (e) {}
+
+  if (dbPool) {
+    try {
+      const r = await dbQuery("SELECT id, mime_type, original_name, octet_length(data) AS size, created_at FROM blog_media ORDER BY id DESC LIMIT 500");
+      r.rows.forEach(row => {
+        const mime = row.mime_type || 'application/octet-stream';
+        const kind = /^video\//i.test(mime) ? 'video' : (/^image\//i.test(mime) ? 'image' : 'file');
+        files.push({
+          name: row.original_name || ('media-' + row.id),
+          url: '/blog-media/' + row.id,
+          size: Number(row.size) || 0,
+          date: row.created_at ? new Date(row.created_at).toISOString().split('T')[0] : '',
+          type: mime,
+          kind: kind
+        });
+      });
+    } catch (e) { console.error('blog_media list failed:', e.message); }
+  }
+
+  files.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
   res.json({ success: true, files });
 });
 

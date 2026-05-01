@@ -1494,21 +1494,29 @@ app.get('/blog/:slug', async (req, res) => {
     let header = executePhpTemplate(headerContent, 'blog');
     let footer = executePhpTemplate(footerContent, 'blog');
     const safePostTitle = escapeHtmlSafe(post.title);
+    const safePostTitleAr = escapeHtmlSafe(post.title_ar || '');
     const safePostImg = escapeHtmlSafe(post.image_url || '');
     const safePostContent = post.content ? sanitizeBlogHtml(post.content) : escapeHtmlSafe(post.excerpt || '');
+    const safePostContentArHtml = post.content_ar ? sanitizeBlogHtml(post.content_ar) : '';
+    const safePostContentArAttr = escapeHtmlSafe(safePostContentArHtml);
+    const titleArAttr = post.title_ar ? ' data-ar="' + safePostTitleAr + '"' : '';
+    const contentArAttr = post.content_ar ? ' data-ar-html="' + safePostContentArAttr + '" dir="auto"' : '';
+    const dateEn = new Date(post.created_at).toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
+    let dateAr = '';
+    try { dateAr = new Date(post.created_at).toLocaleDateString('ar', {year:'numeric',month:'long',day:'numeric'}); } catch(e) { dateAr = dateEn; }
     const postHtml = `
       <section class="hero-banner" style="min-height:200px">
         <div class="container text-center" style="padding-top:120px;padding-bottom:40px">
-          <h1 class="hero-banner-title hero-banner-title-lg">${safePostTitle}</h1>
-          <p class="hero-banner-subtitle">${new Date(post.created_at).toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'})}</p>
+          <h1 class="hero-banner-title hero-banner-title-lg"${titleArAttr}>${safePostTitle}</h1>
+          <p class="hero-banner-subtitle" data-ar="${escapeHtmlSafe(dateAr)}">${dateEn}</p>
         </div>
       </section>
       <section class="section bg-white">
         <div class="container" style="max-width:800px;margin:0 auto">
           ${post.image_url ? '<img src="' + safePostImg + '" style="width:100%;border-radius:12px;margin-bottom:2rem" alt="' + safePostTitle + '" />' : ''}
-          <div class="blog-post-content" style="font-size:1.05rem;line-height:1.8;color:#334155">${safePostContent}</div>
+          <div class="blog-post-content" style="font-size:1.05rem;line-height:1.8;color:#334155"${contentArAttr}>${safePostContent}</div>
           <div style="margin-top:3rem;padding-top:2rem;border-top:1px solid #e2e8f0">
-            <a href="/blog" class="service-card-link" style="font-size:1rem">&larr; Back to Blog</a>
+            <a href="/blog" class="service-card-link" style="font-size:1rem" data-ar="&rarr; العودة إلى المدونة">&larr; Back to Blog</a>
           </div>
         </div>
       </section>`;

@@ -2160,12 +2160,17 @@ html.is-rtl .footer-cta-btn {
 .blog-post-content li:last-child {
   margin-bottom: 0;
 }
-.blog-post-content img {
+.blog-post-content img,
+.blog-post-content video {
   max-width: 100%;
   height: auto;
   display: block;
   margin: 1.5rem auto;
   border-radius: 8px;
+}
+.blog-post-content video {
+  width: 100%;
+  background: #000;
 }
 .blog-post-content a {
   color: #0ea5e9;

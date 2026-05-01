@@ -1001,6 +1001,24 @@ app.get('/blog-image/:id', async (req, res) => {
   }
 });
 
+app.get('/blog-media/:id', async (req, res) => {
+  if (!dbPool) return res.status(404).send('Not found');
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).send('Bad id');
+    const r = await dbQuery('SELECT mime_type, data FROM blog_media WHERE id=$1', [id]);
+    if (!r.rows.length) return res.status(404).send('Not found');
+    const row = r.rows[0];
+    res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.end(row.data);
+  } catch (e) {
+    console.error('blog-media error:', e.message);
+    res.status(500).send('Error');
+  }
+});
+
 app.post('/admin/api/upload', (req, res) => {
   const auth = req.headers.authorization || '';
   const token = auth.replace('Bearer ', '');
@@ -1018,9 +1036,23 @@ app.post('/admin/api/upload', (req, res) => {
     return res.status(400).json({ success: false, message: 'No boundary found' });
   }
 
+  const MAX_BYTES = 25 * 1024 * 1024;
   const chunks = [];
-  req.on('data', chunk => chunks.push(chunk));
-  req.on('end', () => {
+  let total = 0;
+  let aborted = false;
+  req.on('data', chunk => {
+    if (aborted) return;
+    total += chunk.length;
+    if (total > MAX_BYTES) {
+      aborted = true;
+      try { res.status(413).json({ success: false, message: 'File too large (max 25 MB). For larger videos, host on YouTube/Vimeo and embed the link.' }); } catch(e) {}
+      try { req.destroy(); } catch(e) {}
+      return;
+    }
+    chunks.push(chunk);
+  });
+  req.on('end', async () => {
+    if (aborted) return;
     const buffer = Buffer.concat(chunks);
     const boundaryBuf = Buffer.from('--' + boundary);
     const parts = [];
@@ -1057,19 +1089,50 @@ app.post('/admin/api/upload', (req, res) => {
       return res.status(400).json({ success: false, message: 'No file found in upload' });
     }
 
-    const ext = path.extname(originalName) || '.bin';
-    const safeName = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
-    const filePath = path.join(UPLOADS_DIR, safeName);
-    fs.writeFileSync(filePath, fileBuffer);
+    const isImage = /^image\//i.test(mimeType);
+    const isVideo = /^video\//i.test(mimeType);
+    if (!isImage && !isVideo) {
+      return res.status(400).json({ success: false, message: 'Only image and video files are allowed' });
+    }
 
-    const fileUrl = '/uploads/' + safeName;
-    res.json({
-      success: true,
-      url: fileUrl,
-      name: originalName,
-      size: fileBuffer.length,
-      type: mimeType
-    });
+    if (process.env.VERCEL && dbPool) {
+      try {
+        const ins = await dbQuery(
+          'INSERT INTO blog_media (mime_type, original_name, data) VALUES ($1, $2, $3) RETURNING id',
+          [mimeType, originalName.slice(0, 500), fileBuffer]
+        );
+        const mediaId = ins.rows[0].id;
+        return res.json({
+          success: true,
+          url: '/blog-media/' + mediaId,
+          name: originalName,
+          size: fileBuffer.length,
+          type: mimeType,
+          kind: isVideo ? 'video' : 'image'
+        });
+      } catch (e) {
+        console.error('blog_media insert failed:', e.message);
+        return res.status(500).json({ success: false, message: 'Failed to store file' });
+      }
+    }
+
+    try {
+      const ext = path.extname(originalName) || '.bin';
+      const safeName = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
+      const filePath = path.join(UPLOADS_DIR, safeName);
+      fs.writeFileSync(filePath, fileBuffer);
+      return res.json({
+        success: true,
+        url: '/uploads/' + safeName,
+        name: originalName,
+        size: fileBuffer.length,
+        type: mimeType,
+        kind: isVideo ? 'video' : 'image'
+      });
+    } catch (e) {
+      console.error('upload write failed:', e.message);
+      return res.status(500).json({ success: false, message: 'Failed to save file' });
+    }
   });
 });
 
@@ -1719,6 +1782,7 @@ async function initDatabase() {
     await dbQuery(`CREATE TABLE IF NOT EXISTS leads (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL DEFAULT '', email VARCHAR(255) NOT NULL DEFAULT '', phone VARCHAR(100) DEFAULT '', service_type VARCHAR(255) DEFAULT '', details TEXT DEFAULT '', status VARCHAR(50) DEFAULT 'new', created_at TIMESTAMP DEFAULT NOW())`);
     await dbQuery(`CREATE TABLE IF NOT EXISTS blog_posts (id SERIAL PRIMARY KEY, title VARCHAR(500) NOT NULL DEFAULT '', title_ar VARCHAR(500) DEFAULT '', excerpt TEXT DEFAULT '', excerpt_ar TEXT DEFAULT '', content TEXT DEFAULT '', content_ar TEXT DEFAULT '', slug VARCHAR(255) UNIQUE, image_url TEXT DEFAULT '', status VARCHAR(50) DEFAULT 'published', created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW())`);
     await dbQuery(`CREATE TABLE IF NOT EXISTS blog_images (id SERIAL PRIMARY KEY, mime_type VARCHAR(100) NOT NULL DEFAULT 'image/png', data BYTEA NOT NULL, created_at TIMESTAMP DEFAULT NOW())`);
+    await dbQuery(`CREATE TABLE IF NOT EXISTS blog_media (id SERIAL PRIMARY KEY, mime_type VARCHAR(100) NOT NULL DEFAULT 'application/octet-stream', original_name VARCHAR(500) DEFAULT '', data BYTEA NOT NULL, created_at TIMESTAMP DEFAULT NOW())`);
     await dbQuery(`CREATE TABLE IF NOT EXISTS page_views (id SERIAL PRIMARY KEY, page VARCHAR(500) NOT NULL, referrer VARCHAR(1000) DEFAULT '', user_agent TEXT DEFAULT '', session_id VARCHAR(100) DEFAULT '', ip VARCHAR(100) DEFAULT '', created_at TIMESTAMP DEFAULT NOW())`);
     await dbQuery(`CREATE INDEX IF NOT EXISTS idx_page_views_created ON page_views(created_at)`);
     await dbQuery(`CREATE INDEX IF NOT EXISTS idx_page_views_page ON page_views(page)`);

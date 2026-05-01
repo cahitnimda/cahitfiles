@@ -2419,7 +2419,9 @@
       var temp = document.createElement('div');
       temp.innerHTML = editor.innerHTML;
       Array.prototype.forEach.call(temp.querySelectorAll('*'), function(el) {
-        if (el.hasAttribute('style')) el.removeAttribute('style');
+        var tag = el.tagName;
+        var keepStyle = (tag === 'VIDEO' || tag === 'AUDIO' || tag === 'IFRAME' || tag === 'IMG' || tag === 'SOURCE');
+        if (!keepStyle && el.hasAttribute('style')) el.removeAttribute('style');
         if (el.hasAttribute('align')) el.removeAttribute('align');
         if (el.hasAttribute('class')) el.removeAttribute('class');
       });
@@ -2458,7 +2460,7 @@
       });
       Array.prototype.forEach.call(wrapper.querySelectorAll('p'), function(p) {
         var hasContent = (p.textContent || '').replace(/\u00a0/g, '').trim().length > 0
-          || p.querySelector('img,iframe');
+          || p.querySelector('img,iframe,video,audio,source');
         if (!hasContent) p.parentNode.removeChild(p);
       });
       editor.innerHTML = wrapper.innerHTML || '<p><br></p>';
@@ -2495,8 +2497,10 @@
             '<button type="button" data-cmd="insertOrderedList" title="Numbered list">1. List</button>' +
             '<span class="rte-sep"></span>' +
             '<button type="button" data-cmd="createLink" title="Insert link">🔗 Link</button>' +
-            '<button type="button" data-cmd="insertImage" title="Insert image">🖼 Image</button>' +
-            '<button type="button" data-cmd="uploadImage" title="Upload image">📤 Upload</button>' +
+            '<button type="button" data-cmd="insertImage" title="Insert image by URL">🖼 Image URL</button>' +
+            '<button type="button" data-cmd="uploadImage" title="Upload image from your computer">📤 Upload Image</button>' +
+            '<button type="button" data-cmd="uploadVideo" title="Upload video from your computer">🎬 Upload Video</button>' +
+            '<button type="button" data-cmd="insertVideoUrl" title="Embed video by URL (mp4/webm)">🔗 Video URL</button>' +
             '<span class="rte-sep"></span>' +
             '<button type="button" data-cmd="normalizeSpacing" title="Make all paragraph spacing equal">⇅ Even Spacing</button>' +
             '<button type="button" data-cmd="removeFormat" title="Clear formatting">✕ Clear</button>' +
@@ -2517,8 +2521,10 @@
             '<button type="button" data-cmd="insertOrderedList" title="Numbered list">1. List</button>' +
             '<span class="rte-sep"></span>' +
             '<button type="button" data-cmd="createLink" title="Insert link">🔗 Link</button>' +
-            '<button type="button" data-cmd="insertImage" title="Insert image">🖼 Image</button>' +
-            '<button type="button" data-cmd="uploadImage" title="Upload image">📤 Upload</button>' +
+            '<button type="button" data-cmd="insertImage" title="Insert image by URL">🖼 Image URL</button>' +
+            '<button type="button" data-cmd="uploadImage" title="Upload image from your computer">📤 Upload Image</button>' +
+            '<button type="button" data-cmd="uploadVideo" title="Upload video from your computer">🎬 Upload Video</button>' +
+            '<button type="button" data-cmd="insertVideoUrl" title="Embed video by URL (mp4/webm)">🔗 Video URL</button>' +
             '<span class="rte-sep"></span>' +
             '<button type="button" data-cmd="normalizeSpacing" title="Make all paragraph spacing equal">⇅ Even Spacing</button>' +
             '<button type="button" data-cmd="removeFormat" title="Clear formatting">✕ Clear</button>' +
@@ -2616,21 +2622,46 @@
           } else if (cmd === 'insertImage') {
             var imgUrl = prompt('Image URL:', 'https://');
             if (imgUrl) document.execCommand('insertImage', false, imgUrl);
-          } else if (cmd === 'uploadImage') {
+          } else if (cmd === 'insertVideoUrl') {
+            var vUrl = prompt('Video URL (must be a direct .mp4 / .webm / .ogg link):', 'https://');
+            if (vUrl) {
+              var safeVUrl = vUrl.replace(/"/g, '&quot;');
+              var vidHtml = '<p><video controls playsinline preload="metadata" style="max-width:100%;border-radius:8px" src="' + safeVUrl + '"></video></p><p><br></p>';
+              editor.focus();
+              document.execCommand('insertHTML', false, vidHtml);
+            }
+          } else if (cmd === 'uploadImage' || cmd === 'uploadVideo') {
+            var isVid = (cmd === 'uploadVideo');
             var fi = document.createElement('input');
             fi.type = 'file';
-            fi.accept = 'image/*';
+            fi.accept = isVid ? 'video/*' : 'image/*';
             fi.onchange = function() {
               var f = fi.files[0]; if (!f) return;
+              var maxBytes = isVid ? (4 * 1024 * 1024) : (4 * 1024 * 1024);
+              if (f.size > maxBytes) {
+                showToast((isVid ? 'Video' : 'Image') + ' too large. Hosted limit is ~4 MB. ' + (isVid ? 'For longer videos, host on YouTube/Vimeo and use Video URL.' : 'Try compressing the image.'), 'error');
+                return;
+              }
               var rteToken = sessionStorage.getItem('cahit_admin_token') || localStorage.getItem('cahit_admin_token');
               var fd = new FormData(); fd.append('file', f);
+              showToast('Uploading ' + (isVid ? 'video' : 'image') + '...', 'info');
               fetch('/admin/api/upload', { method: 'POST', headers: { 'Authorization': 'Bearer ' + rteToken }, body: fd })
-                .then(function(r) { return r.json(); })
-                .then(function(d) {
-                  if (d.success && d.url) {
+                .then(function(r) { return r.json().then(function(j){ return { ok: r.ok, data: j }; }); })
+                .then(function(res) {
+                  var d = res.data;
+                  if (d && d.success && d.url) {
                     editor.focus();
-                    document.execCommand('insertImage', false, d.url);
-                  } else { showToast(d.message || d.error || 'Upload failed', 'error'); }
+                    if (d.kind === 'video' || isVid) {
+                      var safeUrl = d.url.replace(/"/g, '&quot;');
+                      var html = '<p><video controls playsinline preload="metadata" style="max-width:100%;border-radius:8px" src="' + safeUrl + '"></video></p><p><br></p>';
+                      document.execCommand('insertHTML', false, html);
+                    } else {
+                      document.execCommand('insertImage', false, d.url);
+                    }
+                    showToast('Uploaded', 'success');
+                  } else {
+                    showToast((d && (d.message || d.error)) || 'Upload failed', 'error');
+                  }
                 }).catch(function() { showToast('Upload failed', 'error'); });
             };
             fi.click();

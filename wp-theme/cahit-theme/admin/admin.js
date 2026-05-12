@@ -940,7 +940,9 @@
 
     if (fields.length > 0) {
       fields.forEach(function(f) {
-        var val = state.editedContent[f.key] || f.defaultVal;
+        var rawVal = state.editedContent[f.key];
+        if (rawVal === undefined || rawVal === null) rawVal = f.defaultVal;
+        var val = (rawVal === undefined || rawVal === null) ? '' : String(rawVal);
         if (f.type === 'image') {
           var previewSrc = val || '';
           fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + '</label>' +
@@ -1859,21 +1861,29 @@
 
     var rows = '';
     state.leads.forEach(function(l, i) {
+      var safeStatus = escapeHtml(String(l.status || 'New'));
       var statusBadge = l.status === 'new' ? '<span class="badge badge-blue">New</span>' :
                         l.status === 'contacted' ? '<span class="badge badge-green">Contacted</span>' :
-                        '<span class="badge badge-gray">' + (l.status || 'New') + '</span>';
+                        '<span class="badge badge-gray">' + safeStatus + '</span>';
       var dateStr = l.created_at ? new Date(l.created_at).toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'}) : '-';
+      var leadId = parseInt(l.id, 10) || 0;
       var actions = l.status === 'new' ?
-        '<button class="btn btn-sm btn-outline" onclick="markLeadStatus(' + l.id + ', \'contacted\')" data-testid="btn-lead-contact-' + l.id + '">Mark Contacted</button>' :
-        '<button class="btn btn-sm btn-outline" onclick="markLeadStatus(' + l.id + ', \'new\')" data-testid="btn-lead-new-' + l.id + '">Mark New</button>';
+        '<button class="btn btn-sm btn-outline" onclick="markLeadStatus(' + leadId + ', \'contacted\')" data-testid="btn-lead-contact-' + leadId + '">Mark Contacted</button>' :
+        '<button class="btn btn-sm btn-outline" onclick="markLeadStatus(' + leadId + ', \'new\')" data-testid="btn-lead-new-' + leadId + '">Mark New</button>';
+      var safeName = escapeHtml(l.name || 'Unknown');
+      var safeEmail = escapeHtml(l.email || '');
+      var safePhone = escapeHtml(l.phone || '-');
+      var safeService = escapeHtml(l.service_type || '-');
+      var safeDetailsText = escapeHtml(l.details || '-');
+      var safeDetailsAttr = escapeHtml(l.details || '');
       rows += '<tr data-testid="lead-row-' + i + '">' +
-        '<td><div class="lead-name">' + (l.name || 'Unknown') + '</div><div class="lead-email">' + (l.email || '') + '</div></td>' +
-        '<td>' + (l.phone || '-') + '</td>' +
-        '<td>' + (l.service_type || '-') + '</td>' +
+        '<td><div class="lead-name">' + safeName + '</div><div class="lead-email">' + safeEmail + '</div></td>' +
+        '<td>' + safePhone + '</td>' +
+        '<td>' + safeService + '</td>' +
         '<td>' + statusBadge + '</td>' +
         '<td>' + dateStr + '</td>' +
         '<td>' + actions + '</td>' +
-        '<td><div class="lead-details-text" style="max-width:200px;font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + ((l.details || '').replace(/"/g, '&quot;')) + '">' + (l.details || '-') + '</div></td>' +
+        '<td><div class="lead-details-text" style="max-width:200px;font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + safeDetailsAttr + '">' + safeDetailsText + '</div></td>' +
       '</tr>';
     });
 
@@ -1934,7 +1944,7 @@
       var topPagesHtml = '';
       if (d.topPages && d.topPages.length > 0) {
         d.topPages.forEach(function(p) {
-          topPagesHtml += '<tr><td>' + p.page + '</td><td>' + parseInt(p.views).toLocaleString() + '</td></tr>';
+          topPagesHtml += '<tr><td>' + escapeHtml(p.page || '') + '</td><td>' + parseInt(p.views).toLocaleString() + '</td></tr>';
         });
       } else {
         topPagesHtml = '<tr><td colspan="2" style="text-align:center;color:#94a3b8">No data yet</td></tr>';
@@ -1947,7 +1957,7 @@
         d.referrers.forEach(function(r) {
           var pct = totalRefVisitors > 0 ? ((parseInt(r.visitors) / totalRefVisitors) * 100).toFixed(1) : '0';
           var badgeClass = r.source === 'Direct' ? 'badge-blue' : (r.source === 'Google Search' ? 'badge-green' : 'badge-orange');
-          referrerHtml += '<tr><td>' + r.source + '</td><td>' + parseInt(r.visitors).toLocaleString() + '</td><td><span class="badge ' + badgeClass + '">' + pct + '%</span></td></tr>';
+          referrerHtml += '<tr><td>' + escapeHtml(r.source || '') + '</td><td>' + parseInt(r.visitors).toLocaleString() + '</td><td><span class="badge ' + badgeClass + '">' + pct + '%</span></td></tr>';
         });
       } else {
         referrerHtml = '<tr><td colspan="3" style="text-align:center;color:#94a3b8">No data yet</td></tr>';
@@ -1957,7 +1967,8 @@
       if (d.recentViews && d.recentViews.length > 0) {
         d.recentViews.slice(0, 10).forEach(function(v) {
           var timeAgo = getTimeAgo(new Date(v.created_at));
-          recentHtml += '<tr><td>' + v.page + '</td><td>' + timeAgo + '</td><td style="font-size:11px;color:#94a3b8">' + (v.referrer ? v.referrer.substring(0, 40) : 'Direct') + '</td></tr>';
+          var refTxt = v.referrer ? String(v.referrer).substring(0, 40) : 'Direct';
+          recentHtml += '<tr><td>' + escapeHtml(v.page || '') + '</td><td>' + escapeHtml(timeAgo) + '</td><td style="font-size:11px;color:#94a3b8">' + escapeHtml(refTxt) + '</td></tr>';
         });
       } else {
         recentHtml = '<tr><td colspan="3" style="text-align:center;color:#94a3b8">No recent visits</td></tr>';

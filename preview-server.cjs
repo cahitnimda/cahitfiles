@@ -773,10 +773,19 @@ app.post('/admin/api/save-openai-key', express.json(), async (req, res) => {
   if (!token || (!adminTokens.has(token) && !verifyAdminToken(token))) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
-  const { key } = req.body || {};
-  saveOpenAIKey(key || '');
-  await dbSetSetting('openai_api_key', key || '');
-  cachedApiKey = key || null;
+  const { key, clear } = req.body || {};
+  const trimmed = (key == null ? '' : String(key)).trim();
+  // Refuse to silently wipe an existing key. Caller must pass `clear: true` to clear it.
+  if (!trimmed && !clear) {
+    return res.status(400).json({ success: false, message: 'Empty key. Pass {clear:true} to explicitly remove the stored key.' });
+  }
+  // Basic sanity check: OpenAI keys start with "sk-" and are at least ~20 chars.
+  if (trimmed && (!/^sk-/.test(trimmed) || trimmed.length < 20)) {
+    return res.status(400).json({ success: false, message: 'That does not look like a valid OpenAI API key (should start with "sk-" and be at least 20 characters).' });
+  }
+  saveOpenAIKey(trimmed);
+  await dbSetSetting('openai_api_key', trimmed);
+  cachedApiKey = trimmed || null;
   res.json({ success: true });
 });
 

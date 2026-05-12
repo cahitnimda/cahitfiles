@@ -776,7 +776,7 @@ app.post('/admin/api/save-openai-key', express.json(), async (req, res) => {
   const { key, clear } = req.body || {};
   const trimmed = (key == null ? '' : String(key)).trim();
   // Refuse to silently wipe an existing key. Caller must pass `clear: true` to clear it.
-  if (!trimmed && !clear) {
+  if (!trimmed && clear !== true) {
     return res.status(400).json({ success: false, message: 'Empty key. Pass {clear:true} to explicitly remove the stored key.' });
   }
   // Basic sanity check: OpenAI keys start with "sk-" and are at least ~20 chars.

@@ -462,25 +462,34 @@
       { key: 'projects-card6-readmore-slug', label: 'Project 6 Read More Slug', selector: '[data-field=projects-card6-readmore]', type: 'text', defaultVal: 'concrete-formwork' }
     ],
     'project-detail': [
-      { key: 'project-detail-title', label: 'Project Title', selector: '[data-field=project-detail-title]', type: 'text', defaultVal: '' },
-      { key: 'project-detail-subtitle', label: 'Subtitle / Tagline', selector: '[data-field=project-detail-subtitle]', type: 'text', defaultVal: '' },
+      { key: 'project-detail-title', label: 'Project Title (English)', selector: '[data-field=project-detail-title]', type: 'text', defaultVal: '' },
+      { key: 'project-detail-title-ar', label: 'Project Title (Arabic)', selector: '[data-field=project-detail-title]', type: 'text', defaultVal: '', rtl: true },
+      { key: 'project-detail-subtitle', label: 'Subtitle / Tagline (English)', selector: '[data-field=project-detail-subtitle]', type: 'text', defaultVal: '' },
+      { key: 'project-detail-subtitle-ar', label: 'Subtitle / Tagline (Arabic)', selector: '[data-field=project-detail-subtitle]', type: 'text', defaultVal: '', rtl: true },
       { key: 'project-detail-hero-img', label: 'Hero Image', selector: '[data-field=project-detail-hero-img]', type: 'image', attr: 'src', defaultVal: '' },
       { key: 'project-detail-location', label: 'Location', selector: '[data-field=project-detail-location]', type: 'text', defaultVal: '' },
       { key: 'project-detail-category', label: 'Category', selector: '[data-field=project-detail-category]', type: 'text', defaultVal: '' },
       { key: 'project-detail-client', label: 'Client', selector: '[data-field=project-detail-client]', type: 'text', defaultVal: '' },
       { key: 'project-detail-year', label: 'Year', selector: '[data-field=project-detail-year]', type: 'text', defaultVal: '' },
-      { key: 'project-detail-content', label: 'Full Description', selector: '[data-field=project-detail-content]', type: 'richtext', defaultVal: '' },
-      { key: 'project-detail-scope', label: 'Scope of Work', selector: '[data-field=project-detail-scope]', type: 'richtext', defaultVal: '' },
+      { key: 'project-detail-content', label: 'Full Description (English)', selector: '[data-field=project-detail-content]', type: 'richtext', defaultVal: '' },
+      { key: 'project-detail-content-ar', label: 'Full Description (Arabic)', selector: '[data-field=project-detail-content]', type: 'richtext', defaultVal: '', rtl: true },
+      { key: 'project-detail-scope', label: 'Scope of Work (English)', selector: '[data-field=project-detail-scope]', type: 'richtext', defaultVal: '' },
+      { key: 'project-detail-scope-ar', label: 'Scope of Work (Arabic)', selector: '[data-field=project-detail-scope]', type: 'richtext', defaultVal: '', rtl: true },
       { key: 'project-detail-img2', label: 'Gallery Image 2', selector: '[data-field=project-detail-img2]', type: 'image', attr: 'src', defaultVal: '' },
       { key: 'project-detail-img3', label: 'Gallery Image 3', selector: '[data-field=project-detail-img3]', type: 'image', attr: 'src', defaultVal: '' }
     ],
     'service-detail': [
-      { key: 'service-detail-title', label: 'Service Title', selector: '[data-field=service-detail-title]', type: 'text', defaultVal: '' },
-      { key: 'service-detail-subtitle', label: 'Subtitle / Tagline', selector: '[data-field=service-detail-subtitle]', type: 'text', defaultVal: '' },
+      { key: 'service-detail-title', label: 'Service Title (English)', selector: '[data-field=service-detail-title]', type: 'text', defaultVal: '' },
+      { key: 'service-detail-title-ar', label: 'Service Title (Arabic)', selector: '[data-field=service-detail-title]', type: 'text', defaultVal: '', rtl: true },
+      { key: 'service-detail-subtitle', label: 'Subtitle / Tagline (English)', selector: '[data-field=service-detail-subtitle]', type: 'text', defaultVal: '' },
+      { key: 'service-detail-subtitle-ar', label: 'Subtitle / Tagline (Arabic)', selector: '[data-field=service-detail-subtitle]', type: 'text', defaultVal: '', rtl: true },
       { key: 'service-detail-hero-img', label: 'Hero Image', selector: '[data-field=service-detail-hero-img]', type: 'image', attr: 'src', defaultVal: '' },
-      { key: 'service-detail-content', label: 'Full Description', selector: '[data-field=service-detail-content]', type: 'richtext', defaultVal: '' },
-      { key: 'service-detail-features', label: 'Key Features / Capabilities', selector: '[data-field=service-detail-features]', type: 'richtext', defaultVal: '' },
-      { key: 'service-detail-process', label: 'Our Process / Approach', selector: '[data-field=service-detail-process]', type: 'richtext', defaultVal: '' },
+      { key: 'service-detail-content', label: 'Full Description (English)', selector: '[data-field=service-detail-content]', type: 'richtext', defaultVal: '' },
+      { key: 'service-detail-content-ar', label: 'Full Description (Arabic)', selector: '[data-field=service-detail-content]', type: 'richtext', defaultVal: '', rtl: true },
+      { key: 'service-detail-features', label: 'Key Features / Capabilities (English)', selector: '[data-field=service-detail-features]', type: 'richtext', defaultVal: '' },
+      { key: 'service-detail-features-ar', label: 'Key Features / Capabilities (Arabic)', selector: '[data-field=service-detail-features]', type: 'richtext', defaultVal: '', rtl: true },
+      { key: 'service-detail-process', label: 'Our Process / Approach (English)', selector: '[data-field=service-detail-process]', type: 'richtext', defaultVal: '' },
+      { key: 'service-detail-process-ar', label: 'Our Process / Approach (Arabic)', selector: '[data-field=service-detail-process]', type: 'richtext', defaultVal: '', rtl: true },
       { key: 'service-detail-img2', label: 'Gallery Image 2', selector: '[data-field=service-detail-img2]', type: 'image', attr: 'src', defaultVal: '' },
       { key: 'service-detail-img3', label: 'Gallery Image 3', selector: '[data-field=service-detail-img3]', type: 'image', attr: 'src', defaultVal: '' }
     ],
@@ -959,20 +968,25 @@
             '<textarea class="form-textarea live-edit-field" data-key="' + f.key + '" data-selector="' + f.selector + '" data-testid="field-' + f.key + '">' + val + '</textarea></div>';
         } else if (f.type === 'richtext') {
           var rtHtml = (typeof rteInitialHtml === 'function') ? rteInitialHtml(val || '') : (val || '');
+          var rtlAttr = f.rtl ? ' dir="rtl"' : '';
+          var rtlStyle = f.rtl ? 'text-align:right;font-family:\'Noto Sans Arabic\',Arial,sans-serif;' : '';
           fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + '</label>' +
-            '<div class="rte-mini-toolbar" data-rte-target="rte-' + f.key + '" style="display:flex;gap:4px;flex-wrap:wrap;background:#f1f5f9;border:1px solid #e2e8f0;border-bottom:none;border-radius:6px 6px 0 0;padding:4px">' +
-              '<button type="button" class="rte-mini-btn" data-cmd="bold" title="Bold" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer;font-weight:700">B</button>' +
-              '<button type="button" class="rte-mini-btn" data-cmd="italic" title="Italic" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer;font-style:italic">I</button>' +
-              '<button type="button" class="rte-mini-btn" data-cmd="underline" title="Underline" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer;text-decoration:underline">U</button>' +
-              '<button type="button" class="rte-mini-btn" data-cmd="insertUnorderedList" title="Bulleted list" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer">&bull; List</button>' +
-              '<button type="button" class="rte-mini-btn" data-cmd="insertOrderedList" title="Numbered list" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer">1. List</button>' +
+            '<div class="rte-mini-toolbar" data-rte-target="rte-' + f.key + '" style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;background:#f1f5f9;border:1px solid #e2e8f0;border-bottom:none;border-radius:6px 6px 0 0;padding:4px">' +
+              '<button type="button" class="rte-mini-btn" data-cmd="bold" title="Bold (select text first)" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer;font-weight:700;min-width:28px">B</button>' +
+              '<button type="button" class="rte-mini-btn" data-cmd="italic" title="Italic (select text first)" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer;font-style:italic;min-width:28px">I</button>' +
+              '<button type="button" class="rte-mini-btn" data-cmd="underline" title="Underline (select text first)" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer;text-decoration:underline;min-width:28px">U</button>' +
+              '<button type="button" class="rte-mini-btn" data-cmd="insertUnorderedList" title="Bulleted list (place cursor on a line)" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer">&bull; List</button>' +
+              '<button type="button" class="rte-mini-btn" data-cmd="insertOrderedList" title="Numbered list (place cursor on a line)" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer">1. List</button>' +
               '<button type="button" class="rte-mini-btn" data-cmd="removeFormat" title="Clear formatting" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer">Clear</button>' +
+              '<span style="margin-left:auto;font-size:11px;color:#64748b;padding:0 6px">Tip: select text first, then click B / I / U</span>' +
             '</div>' +
-            '<div class="rte-editor rte-mini-editor live-edit-richtext" id="rte-' + f.key + '" contenteditable="true" data-key="' + f.key + '" data-selector="' + f.selector + '" data-testid="field-' + f.key + '" style="min-height:120px;border:1px solid #e2e8f0;border-radius:0 0 6px 6px;padding:10px 12px;background:#fff;font-size:14px;line-height:1.6;outline:none">' + rtHtml + '</div>' +
+            '<div class="rte-editor rte-mini-editor live-edit-richtext" id="rte-' + f.key + '"' + rtlAttr + ' contenteditable="true" data-key="' + f.key + '" data-selector="' + f.selector + '" data-testid="field-' + f.key + '" style="min-height:120px;border:1px solid #e2e8f0;border-radius:0 0 6px 6px;padding:10px 12px;background:#fff;font-size:14px;line-height:1.6;outline:none;' + rtlStyle + '">' + rtHtml + '</div>' +
           '</div>';
         } else {
+          var rtlAttrIn = f.rtl ? ' dir="rtl"' : '';
+          var rtlStyleIn = f.rtl ? ' style="text-align:right;font-family:\'Noto Sans Arabic\',Arial,sans-serif"' : '';
           fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + '</label>' +
-            '<input class="form-input live-edit-field" data-key="' + f.key + '" data-selector="' + f.selector + '" value="' + val.replace(/"/g, '&quot;') + '" data-testid="field-' + f.key + '" /></div>';
+            '<input class="form-input live-edit-field"' + rtlAttrIn + rtlStyleIn + ' data-key="' + f.key + '" data-selector="' + f.selector + '" value="' + val.replace(/"/g, '&quot;') + '" data-testid="field-' + f.key + '" /></div>';
         }
       });
     } else {
@@ -1086,17 +1100,63 @@
       });
     });
 
+    // Track last selection per-editor so toolbar buttons keep working after focus loss
+    document.querySelectorAll('.live-edit-richtext').forEach(function(editor) {
+      var saveSel = function() {
+        var sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          var range = sel.getRangeAt(0);
+          if (editor.contains(range.commonAncestorContainer)) {
+            editor._savedRange = range.cloneRange();
+          }
+        }
+      };
+      editor.addEventListener('keyup', saveSel);
+      editor.addEventListener('mouseup', saveSel);
+      editor.addEventListener('focus', saveSel);
+    });
+
     document.querySelectorAll('.rte-mini-toolbar .rte-mini-btn').forEach(function(btn) {
       btn.addEventListener('mousedown', function(e) { e.preventDefault(); });
       btn.addEventListener('click', function(e) {
         e.preventDefault();
+        e.stopPropagation();
         var toolbar = this.closest('.rte-mini-toolbar');
         var targetId = toolbar && toolbar.getAttribute('data-rte-target');
         var editor = targetId && document.getElementById(targetId);
         if (!editor) return;
         editor.focus();
+        // Restore previously saved selection so the command applies to the right text
+        if (editor._savedRange) {
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(editor._savedRange);
+        }
         var cmd = this.getAttribute('data-cmd');
-        try { document.execCommand(cmd, false, null); } catch(err) {}
+        var ok = false;
+        try { ok = document.execCommand(cmd, false, null); } catch(err) {}
+        // Manual fallback for B/I/U if execCommand returned false (rare in modern browsers)
+        if (!ok && (cmd === 'bold' || cmd === 'italic' || cmd === 'underline')) {
+          var sel2 = window.getSelection();
+          if (sel2 && sel2.rangeCount > 0 && !sel2.isCollapsed) {
+            var r = sel2.getRangeAt(0);
+            var tag = cmd === 'bold' ? 'strong' : (cmd === 'italic' ? 'em' : 'u');
+            var wrap = document.createElement(tag);
+            try { wrap.appendChild(r.extractContents()); r.insertNode(wrap); } catch(err2) {}
+          }
+        }
+        // Update active state on B / I / U
+        ['bold','italic','underline'].forEach(function(c) {
+          var b = toolbar.querySelector('[data-cmd="' + c + '"]');
+          if (!b) return;
+          var active = false;
+          try { active = document.queryCommandState(c); } catch(_) {}
+          b.style.background = active ? '#0ea5e9' : '#fff';
+          b.style.color = active ? '#fff' : '';
+        });
+        // Re-save selection
+        var sel3 = window.getSelection();
+        if (sel3 && sel3.rangeCount > 0) editor._savedRange = sel3.getRangeAt(0).cloneRange();
         var key = editor.getAttribute('data-key');
         var selector = editor.getAttribute('data-selector');
         state.editedContent[key] = editor.innerHTML;

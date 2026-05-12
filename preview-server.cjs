@@ -1895,6 +1895,10 @@ app.get('/projects/:slug', async (req, res) => {
     let scope = '';
     let img2 = '';
     let img3 = '';
+    let titleAr = '';
+    let subtitleAr = '';
+    let contentAr = '';
+    let scopeAr = '';
 
     if (dbPool) {
       const r = await dbQuery('SELECT value FROM site_settings WHERE key=$1', ['content_project-detail-' + slug]);
@@ -1911,6 +1915,10 @@ app.get('/projects/:slug', async (req, res) => {
         scope = data['project-detail-scope'] || '';
         img2 = data['project-detail-img2'] || '';
         img3 = data['project-detail-img3'] || '';
+        titleAr = data['project-detail-title-ar'] || '';
+        subtitleAr = data['project-detail-subtitle-ar'] || '';
+        contentAr = data['project-detail-content-ar'] || '';
+        scopeAr = data['project-detail-scope-ar'] || '';
       }
       const projCards = await getProjectCards();
       const matchCard = projCards.find(c => c.slug === slug);
@@ -1940,16 +1948,16 @@ app.get('/projects/:slug', async (req, res) => {
         <div class="hero-banner-overlay"></div>
         <div class="hero-banner-content">
           <div class="container">
-            <h1 class="hero-banner-title" data-field="project-detail-title">${title}</h1>
-            ${subtitle ? '<p class="hero-banner-subtitle" data-field="project-detail-subtitle">' + subtitle + '</p>' : ''}
+            <h1 class="hero-banner-title" data-field="project-detail-title"${titleAr ? ' data-ar="' + titleAr.replace(/"/g, '&quot;') + '"' : ''}>${title}</h1>
+            ${subtitle ? '<p class="hero-banner-subtitle" data-field="project-detail-subtitle"' + (subtitleAr ? ' data-ar="' + subtitleAr.replace(/"/g, '&quot;') + '"' : '') + '>' + subtitle + '</p>' : ''}
           </div>
         </div>
       </section>
       <section class="section bg-white">
         <div class="container" style="max-width:900px;margin:0 auto">
           ${infoItems ? '<div class="detail-info-bar" style="display:flex;flex-wrap:wrap;gap:1.5rem;padding:1.5rem;background:#f8fafc;border-radius:12px;margin-bottom:2rem;font-size:0.95rem;color:#334155">' + infoItems + '</div>' : ''}
-          ${content ? '<div class="detail-content" data-field="project-detail-content" style="font-size:1.05rem;line-height:1.8;color:#334155;white-space:normal">' + content + '</div>' : '<div class="detail-content" style="font-size:1.05rem;line-height:1.8;color:#64748b;text-align:center;padding:3rem 0">Detail content coming soon. Edit this page from the admin dashboard.</div>'}
-          ${scope ? '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem">Scope of Work</h3><div data-field="project-detail-scope" style="font-size:1rem;line-height:1.8;color:#334155;white-space:normal">' + scope + '</div></div>' : ''}
+          ${content ? '<div class="detail-content" data-field="project-detail-content"' + (contentAr ? ' data-ar-html="' + contentAr.replace(/"/g, '&quot;') + '"' : '') + ' style="font-size:1.05rem;line-height:1.8;color:#334155;white-space:normal">' + content + '</div>' : '<div class="detail-content" style="font-size:1.05rem;line-height:1.8;color:#64748b;text-align:center;padding:3rem 0">Detail content coming soon. Edit this page from the admin dashboard.</div>'}
+          ${scope ? '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem" data-ar="نطاق العمل">Scope of Work</h3><div data-field="project-detail-scope"' + (scopeAr ? ' data-ar-html="' + scopeAr.replace(/"/g, '&quot;') + '"' : '') + ' style="font-size:1rem;line-height:1.8;color:#334155;white-space:normal">' + scope + '</div></div>' : ''}
           ${galleryHtml}
           <div style="margin-top:3rem;padding-top:2rem;border-top:1px solid #e2e8f0">
             <a href="/projects" class="service-card-link" style="font-size:1rem">&larr; Back to Projects</a>
@@ -1988,6 +1996,11 @@ app.get('/services/:slug', async (req, res) => {
     let process = '';
     let img2 = '';
     let img3 = '';
+    let titleAr = '';
+    let subtitleAr = '';
+    let contentAr = '';
+    let featuresAr = '';
+    let processAr = '';
 
     if (dbPool) {
       const r = await dbQuery('SELECT value FROM site_settings WHERE key=$1', ['content_service-detail-' + slug]);
@@ -2001,6 +2014,11 @@ app.get('/services/:slug', async (req, res) => {
         process = data['service-detail-process'] || '';
         img2 = data['service-detail-img2'] || '';
         img3 = data['service-detail-img3'] || '';
+        titleAr = data['service-detail-title-ar'] || '';
+        subtitleAr = data['service-detail-subtitle-ar'] || '';
+        contentAr = data['service-detail-content-ar'] || '';
+        featuresAr = data['service-detail-features-ar'] || '';
+        processAr = data['service-detail-process-ar'] || '';
       }
       const svcCards = await getServiceCards();
       const matchSvc = svcCards.find(c => c.slug === slug);
@@ -2021,16 +2039,16 @@ app.get('/services/:slug', async (req, res) => {
         <div class="hero-banner-overlay"></div>
         <div class="hero-banner-content">
           <div class="container">
-            <h1 class="hero-banner-title" data-field="service-detail-title">${title}</h1>
-            ${subtitle ? '<p class="hero-banner-subtitle" data-field="service-detail-subtitle">' + subtitle + '</p>' : ''}
+            <h1 class="hero-banner-title" data-field="service-detail-title"${titleAr ? ' data-ar="' + titleAr.replace(/"/g, '&quot;') + '"' : ''}>${title}</h1>
+            ${subtitle ? '<p class="hero-banner-subtitle" data-field="service-detail-subtitle"' + (subtitleAr ? ' data-ar="' + subtitleAr.replace(/"/g, '&quot;') + '"' : '') + '>' + subtitle + '</p>' : ''}
           </div>
         </div>
       </section>
       <section class="section bg-white">
         <div class="container" style="max-width:900px;margin:0 auto">
-          ${content ? '<div class="detail-content" data-field="service-detail-content" style="font-size:1.05rem;line-height:1.8;color:#334155;white-space:normal">' + content + '</div>' : '<div class="detail-content" style="font-size:1.05rem;line-height:1.8;color:#64748b;text-align:center;padding:3rem 0">Detail content coming soon. Edit this page from the admin dashboard.</div>'}
-          ${features ? '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem">Key Features & Capabilities</h3><div data-field="service-detail-features" style="font-size:1rem;line-height:1.8;color:#334155;white-space:normal">' + features + '</div></div>' : ''}
-          ${process ? '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem">Our Process & Approach</h3><div data-field="service-detail-process" style="font-size:1rem;line-height:1.8;color:#334155;white-space:normal">' + process + '</div></div>' : ''}
+          ${content ? '<div class="detail-content" data-field="service-detail-content"' + (contentAr ? ' data-ar-html="' + contentAr.replace(/"/g, '&quot;') + '"' : '') + ' style="font-size:1.05rem;line-height:1.8;color:#334155;white-space:normal">' + content + '</div>' : '<div class="detail-content" style="font-size:1.05rem;line-height:1.8;color:#64748b;text-align:center;padding:3rem 0">Detail content coming soon. Edit this page from the admin dashboard.</div>'}
+          ${features ? '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem" data-ar="الميزات والقدرات الرئيسية">Key Features & Capabilities</h3><div data-field="service-detail-features"' + (featuresAr ? ' data-ar-html="' + featuresAr.replace(/"/g, '&quot;') + '"' : '') + ' style="font-size:1rem;line-height:1.8;color:#334155;white-space:normal">' + features + '</div></div>' : ''}
+          ${process ? '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem" data-ar="منهجيتنا في العمل">Our Process & Approach</h3><div data-field="service-detail-process"' + (processAr ? ' data-ar-html="' + processAr.replace(/"/g, '&quot;') + '"' : '') + ' style="font-size:1rem;line-height:1.8;color:#334155;white-space:normal">' + process + '</div></div>' : ''}
           ${galleryHtml}
           <div style="margin-top:3rem;padding-top:2rem;border-top:1px solid #e2e8f0">
             <a href="/services" class="service-card-link" style="font-size:1rem">&larr; Back to Services</a>

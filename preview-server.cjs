@@ -1379,7 +1379,12 @@ async function getServiceCards() {
 
 function renderProjectCardsHtml(cards) {
   const arrowSvg = '<svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>';
-  return cards.map(c => `<div class="project-card" data-testid="card-project-${c.slug}">
+  return cards.map(c => {
+    const desc = c.desc || '';
+    const descIsHtml = /<[a-z][\s\S]*>/i.test(desc);
+    const descHtml = descIsHtml ? desc : ('<p>' + desc + '</p>');
+    const arAttr = c.descAr ? ' data-ar-html="'+String(c.descAr).replace(/"/g,'&quot;')+'"' : '';
+    return `<div class="project-card" data-testid="card-project-${c.slug}">
     <div class="project-card-image">
       <img src="${c.img || ''}" alt="${(c.title||'').replace(/"/g,'&quot;')}" />
       <span class="project-category-badge">${c.badge || ''}</span>
@@ -1387,24 +1392,32 @@ function renderProjectCardsHtml(cards) {
     <div class="project-card-content">
       <h3 class="project-card-title">${c.title || ''}</h3>
       <p class="project-card-location">${c.location || ''}</p>
-      <p class="project-card-desc">${c.desc || ''}</p>
+      <div class="project-card-desc"${arAttr}>${descHtml}</div>
       <a href="/projects/${c.slug}" class="service-card-link" data-ar="\u0627\u0642\u0631\u0623 \u0627\u0644\u0645\u0632\u064a\u062f">Read More ${arrowSvg}</a>
     </div>
-  </div>`).join('\n');
+  </div>`;
+  }).join('\n');
 }
 
 function renderServiceCardsHtml(cards) {
   const arrowSvg = '<svg class="icon-arrow-sm" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>';
-  return cards.map(c => `<div class="service-card" data-testid="service-${c.slug}">
+  return cards.map(c => {
+    const desc = c.desc || '';
+    const descIsHtml = /<[a-z][\s\S]*>/i.test(desc);
+    const descHtml = descIsHtml ? desc : ('<p>' + desc + '</p>');
+    const titleArAttr = c.titleAr ? ' data-ar="'+String(c.titleAr).replace(/"/g,'&quot;')+'"' : '';
+    const descArAttr = c.descAr ? ' data-ar-html="'+String(c.descAr).replace(/"/g,'&quot;')+'"' : '';
+    return `<div class="service-card" data-testid="service-${c.slug}">
     <div class="service-card-image">
       <img src="${c.img || ''}" alt="${(c.title||'').replace(/"/g,'&quot;')}" />
     </div>
     <div class="service-card-content">
-      <h3 class="service-card-title" ${c.titleAr ? 'data-ar="'+c.titleAr.replace(/"/g,'&quot;')+'"' : ''}>${c.title || ''}</h3>
-      <p class="service-card-desc" ${c.descAr ? 'data-ar="'+c.descAr.replace(/"/g,'&quot;')+'"' : ''}>${c.desc || ''}</p>
+      <h3 class="service-card-title"${titleArAttr}>${c.title || ''}</h3>
+      <div class="service-card-desc"${descArAttr}>${descHtml}</div>
       <a href="/services/${c.slug}" class="service-card-link" data-ar="\u0627\u0642\u0631\u0623 \u0627\u0644\u0645\u0632\u064a\u062f">Read More ${arrowSvg}</a>
     </div>
-  </div>`).join('\n');
+  </div>`;
+  }).join('\n');
 }
 
 // Dynamic Cards API
@@ -1671,7 +1684,6 @@ app.get('/projects/:slug', async (req, res) => {
         if (!title || title === slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) title = matchCard.title || title;
         if (!location) location = matchCard.location || '';
         if (!category) category = matchCard.badge || '';
-        if (!content) content = matchCard.desc || '';
       }
     }
 
@@ -1701,8 +1713,8 @@ app.get('/projects/:slug', async (req, res) => {
       <section class="section bg-white">
         <div class="container" style="max-width:900px;margin:0 auto">
           ${infoItems ? '<div class="detail-info-bar" style="display:flex;flex-wrap:wrap;gap:1.5rem;padding:1.5rem;background:#f8fafc;border-radius:12px;margin-bottom:2rem;font-size:0.95rem;color:#334155">' + infoItems + '</div>' : ''}
-          ${content ? '<div class="detail-content" data-field="project-detail-content" style="font-size:1.05rem;line-height:1.8;color:#334155;white-space:pre-line">' + content + '</div>' : '<div class="detail-content" style="font-size:1.05rem;line-height:1.8;color:#64748b;text-align:center;padding:3rem 0">Detail content coming soon. Edit this page from the admin dashboard.</div>'}
-          ${scope ? '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem">Scope of Work</h3><div data-field="project-detail-scope" style="font-size:1rem;line-height:1.8;color:#334155;white-space:pre-line">' + scope + '</div></div>' : ''}
+          ${content ? '<div class="detail-content" data-field="project-detail-content" style="font-size:1.05rem;line-height:1.8;color:#334155;white-space:normal">' + content + '</div>' : '<div class="detail-content" style="font-size:1.05rem;line-height:1.8;color:#64748b;text-align:center;padding:3rem 0">Detail content coming soon. Edit this page from the admin dashboard.</div>'}
+          ${scope ? '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem">Scope of Work</h3><div data-field="project-detail-scope" style="font-size:1rem;line-height:1.8;color:#334155;white-space:normal">' + scope + '</div></div>' : ''}
           ${galleryHtml}
           <div style="margin-top:3rem;padding-top:2rem;border-top:1px solid #e2e8f0">
             <a href="/projects" class="service-card-link" style="font-size:1rem">&larr; Back to Projects</a>
@@ -1754,7 +1766,6 @@ app.get('/services/:slug', async (req, res) => {
       if (matchSvc) {
         if (!heroImg) heroImg = matchSvc.img || '';
         if (!title || title === slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) title = matchSvc.title || title;
-        if (!content) content = matchSvc.desc || '';
       }
     }
 
@@ -1776,9 +1787,9 @@ app.get('/services/:slug', async (req, res) => {
       </section>
       <section class="section bg-white">
         <div class="container" style="max-width:900px;margin:0 auto">
-          ${content ? '<div class="detail-content" data-field="service-detail-content" style="font-size:1.05rem;line-height:1.8;color:#334155;white-space:pre-line">' + content + '</div>' : '<div class="detail-content" style="font-size:1.05rem;line-height:1.8;color:#64748b;text-align:center;padding:3rem 0">Detail content coming soon. Edit this page from the admin dashboard.</div>'}
-          ${features ? '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem">Key Features & Capabilities</h3><div data-field="service-detail-features" style="font-size:1rem;line-height:1.8;color:#334155;white-space:pre-line">' + features + '</div></div>' : ''}
-          ${process ? '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem">Our Process & Approach</h3><div data-field="service-detail-process" style="font-size:1rem;line-height:1.8;color:#334155;white-space:pre-line">' + process + '</div></div>' : ''}
+          ${content ? '<div class="detail-content" data-field="service-detail-content" style="font-size:1.05rem;line-height:1.8;color:#334155;white-space:normal">' + content + '</div>' : '<div class="detail-content" style="font-size:1.05rem;line-height:1.8;color:#64748b;text-align:center;padding:3rem 0">Detail content coming soon. Edit this page from the admin dashboard.</div>'}
+          ${features ? '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem">Key Features & Capabilities</h3><div data-field="service-detail-features" style="font-size:1rem;line-height:1.8;color:#334155;white-space:normal">' + features + '</div></div>' : ''}
+          ${process ? '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem">Our Process & Approach</h3><div data-field="service-detail-process" style="font-size:1rem;line-height:1.8;color:#334155;white-space:normal">' + process + '</div></div>' : ''}
           ${galleryHtml}
           <div style="margin-top:3rem;padding-top:2rem;border-top:1px solid #e2e8f0">
             <a href="/services" class="service-card-link" style="font-size:1rem">&larr; Back to Services</a>

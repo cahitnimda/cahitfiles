@@ -181,7 +181,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .logo-img {
-  height: 3rem;
+  height: 102px;
   width: auto;
 }
 
@@ -715,6 +715,15 @@ h1, h2, h3, h4, h5, h6 {
   line-height: 1.6;
   flex: 1;
 }
+.service-card-desc p { margin: 0 0 0.5rem; }
+.service-card-desc p:last-child { margin-bottom: 0; }
+.service-card-desc ul, .service-card-desc ol { margin: 0 0 0.5rem; padding-left: 1.25rem; }
+.project-card-desc p { margin: 0 0 0.5rem; }
+.project-card-desc p:last-child { margin-bottom: 0; }
+.project-card-desc ul, .project-card-desc ol { margin: 0 0 0.5rem; padding-left: 1.25rem; }
+.detail-content p { margin: 0 0 1rem; }
+.detail-content p:last-child { margin-bottom: 0; }
+.detail-content ul, .detail-content ol { margin: 0 0 1rem; padding-left: 1.5rem; }
 
 .service-card-link {
   display: inline-flex;
@@ -1280,7 +1289,7 @@ footer.site-footer {
 .footer-col { }
 
 .footer-logo {
-  height: 2.5rem;
+  height: 94px;
   width: auto;
   margin-bottom: 1rem;
 }
@@ -1931,22 +1940,21 @@ html.is-rtl .footer-cta-btn {
   position: fixed;
   left: 2rem;
   right: auto;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 260px;
   width: 340px;
-  max-height: 90vh;
+  max-height: calc(100vh - 280px);
   overflow-y: auto;
   background: rgba(255,255,255,0.97);
   backdrop-filter: blur(12px);
   border-radius: 1rem;
   padding: 1.5rem;
   box-shadow: 0 20px 50px rgba(0,0,0,0.25);
-  z-index: 45;
+  z-index: 60;
   animation: funnelSlideIn 400ms ease;
 }
 @keyframes funnelSlideIn {
-  from { opacity: 0; transform: translateY(-50%) translateX(30px); }
-  to { opacity: 1; transform: translateY(-50%) translateX(0); }
+  from { opacity: 0; transform: translateX(30px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 .funnel-panel-header {
   display: flex;

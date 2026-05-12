@@ -379,32 +379,32 @@
     ],
     'services-list': [
       { key: 'services-card1-title', label: 'Service 1 Title', selector: '[data-field=services-card1-title]', type: 'text', defaultVal: 'Marine & Coastal Construction' },
-      { key: 'services-card1-desc', label: 'Service 1 Description', selector: '[data-field=services-card1-desc]', type: 'textarea', defaultVal: '' },
+      { key: 'services-card1-desc', label: 'Service 1 Description', selector: '[data-field=services-card1-desc]', type: 'richtext', defaultVal: '' },
       { key: 'services-card1-img', label: 'Service 1 Image', selector: '[data-field=services-card1-img]', type: 'image', attr: 'src', defaultVal: '' },
       { key: 'services-card1-readmore-slug', label: 'Service 1 Read More Slug', selector: '[data-field=services-card1-readmore]', type: 'text', defaultVal: 'marine-coastal-construction' },
 
       { key: 'services-card2-title', label: 'Service 2 Title', selector: '[data-field=services-card2-title]', type: 'text', defaultVal: 'Infrastructure Development' },
-      { key: 'services-card2-desc', label: 'Service 2 Description', selector: '[data-field=services-card2-desc]', type: 'textarea', defaultVal: '' },
+      { key: 'services-card2-desc', label: 'Service 2 Description', selector: '[data-field=services-card2-desc]', type: 'richtext', defaultVal: '' },
       { key: 'services-card2-img', label: 'Service 2 Image', selector: '[data-field=services-card2-img]', type: 'image', attr: 'src', defaultVal: '' },
       { key: 'services-card2-readmore-slug', label: 'Service 2 Read More Slug', selector: '[data-field=services-card2-readmore]', type: 'text', defaultVal: 'infrastructure-development' },
 
       { key: 'services-card3-title', label: 'Service 3 Title', selector: '[data-field=services-card3-title]', type: 'text', defaultVal: 'Earthworks' },
-      { key: 'services-card3-desc', label: 'Service 3 Description', selector: '[data-field=services-card3-desc]', type: 'textarea', defaultVal: '' },
+      { key: 'services-card3-desc', label: 'Service 3 Description', selector: '[data-field=services-card3-desc]', type: 'richtext', defaultVal: '' },
       { key: 'services-card3-img', label: 'Service 3 Image', selector: '[data-field=services-card3-img]', type: 'image', attr: 'src', defaultVal: '' },
       { key: 'services-card3-readmore-slug', label: 'Service 3 Read More Slug', selector: '[data-field=services-card3-readmore]', type: 'text', defaultVal: 'earthworks' },
 
       { key: 'services-card4-title', label: 'Service 4 Title', selector: '[data-field=services-card4-title]', type: 'text', defaultVal: 'Dewatering & Shoring' },
-      { key: 'services-card4-desc', label: 'Service 4 Description', selector: '[data-field=services-card4-desc]', type: 'textarea', defaultVal: '' },
+      { key: 'services-card4-desc', label: 'Service 4 Description', selector: '[data-field=services-card4-desc]', type: 'richtext', defaultVal: '' },
       { key: 'services-card4-img', label: 'Service 4 Image', selector: '[data-field=services-card4-img]', type: 'image', attr: 'src', defaultVal: '' },
       { key: 'services-card4-readmore-slug', label: 'Service 4 Read More Slug', selector: '[data-field=services-card4-readmore]', type: 'text', defaultVal: 'dewatering-shoring' },
 
       { key: 'services-card5-title', label: 'Service 5 Title', selector: '[data-field=services-card5-title]', type: 'text', defaultVal: 'MEP Works' },
-      { key: 'services-card5-desc', label: 'Service 5 Description', selector: '[data-field=services-card5-desc]', type: 'textarea', defaultVal: '' },
+      { key: 'services-card5-desc', label: 'Service 5 Description', selector: '[data-field=services-card5-desc]', type: 'richtext', defaultVal: '' },
       { key: 'services-card5-img', label: 'Service 5 Image', selector: '[data-field=services-card5-img]', type: 'image', attr: 'src', defaultVal: '' },
       { key: 'services-card5-readmore-slug', label: 'Service 5 Read More Slug', selector: '[data-field=services-card5-readmore]', type: 'text', defaultVal: 'mep-works' },
 
       { key: 'services-card6-title', label: 'Service 6 Title', selector: '[data-field=services-card6-title]', type: 'text', defaultVal: 'General Construction' },
-      { key: 'services-card6-desc', label: 'Service 6 Description', selector: '[data-field=services-card6-desc]', type: 'textarea', defaultVal: '' },
+      { key: 'services-card6-desc', label: 'Service 6 Description', selector: '[data-field=services-card6-desc]', type: 'richtext', defaultVal: '' },
       { key: 'services-card6-img', label: 'Service 6 Image', selector: '[data-field=services-card6-img]', type: 'image', attr: 'src', defaultVal: '' },
       { key: 'services-card6-readmore-slug', label: 'Service 6 Read More Slug', selector: '[data-field=services-card6-readmore]', type: 'text', defaultVal: 'general-construction' }
     ],
@@ -420,42 +420,42 @@
     ],
     'projects-grid': [
       { key: 'projects-card1-title', label: 'Project 1 Title', selector: '[data-field=projects-card1-title]', type: 'text', defaultVal: 'Seaport Infrastructure' },
-      { key: 'projects-card1-desc', label: 'Project 1 Description', selector: '[data-field=projects-card1-desc]', type: 'textarea', defaultVal: 'Quay wall construction and breakwater installation' },
+      { key: 'projects-card1-desc', label: 'Project 1 Description', selector: '[data-field=projects-card1-desc]', type: 'richtext', defaultVal: 'Quay wall construction and breakwater installation' },
       { key: 'projects-card1-location', label: 'Project 1 Location', selector: '[data-field=projects-card1-location]', type: 'text', defaultVal: 'Muscat, Oman' },
       { key: 'projects-card1-badge', label: 'Project 1 Category', selector: '[data-field=projects-card1-badge]', type: 'text', defaultVal: 'Marine' },
       { key: 'projects-card1-img', label: 'Project 1 Image', selector: '[data-field=projects-card1-img]', type: 'image', attr: 'src', defaultVal: '' },
       { key: 'projects-card1-readmore-slug', label: 'Project 1 Read More Slug', selector: '[data-field=projects-card1-readmore]', type: 'text', defaultVal: 'seaport-infrastructure' },
 
       { key: 'projects-card2-title', label: 'Project 2 Title', selector: '[data-field=projects-card2-title]', type: 'text', defaultVal: 'Coastal Protection Systems' },
-      { key: 'projects-card2-desc', label: 'Project 2 Description', selector: '[data-field=projects-card2-desc]', type: 'textarea', defaultVal: 'Rock armour installation and coastal defense' },
+      { key: 'projects-card2-desc', label: 'Project 2 Description', selector: '[data-field=projects-card2-desc]', type: 'richtext', defaultVal: 'Rock armour installation and coastal defense' },
       { key: 'projects-card2-location', label: 'Project 2 Location', selector: '[data-field=projects-card2-location]', type: 'text', defaultVal: 'Salalah, Oman' },
       { key: 'projects-card2-badge', label: 'Project 2 Category', selector: '[data-field=projects-card2-badge]', type: 'text', defaultVal: 'Coastal' },
       { key: 'projects-card2-img', label: 'Project 2 Image', selector: '[data-field=projects-card2-img]', type: 'image', attr: 'src', defaultVal: '' },
       { key: 'projects-card2-readmore-slug', label: 'Project 2 Read More Slug', selector: '[data-field=projects-card2-readmore]', type: 'text', defaultVal: 'coastal-protection' },
 
       { key: 'projects-card3-title', label: 'Project 3 Title', selector: '[data-field=projects-card3-title]', type: 'text', defaultVal: 'Road Infrastructure Development' },
-      { key: 'projects-card3-desc', label: 'Project 3 Description', selector: '[data-field=projects-card3-desc]', type: 'textarea', defaultVal: 'Road construction and infrastructure development' },
+      { key: 'projects-card3-desc', label: 'Project 3 Description', selector: '[data-field=projects-card3-desc]', type: 'richtext', defaultVal: 'Road construction and infrastructure development' },
       { key: 'projects-card3-location', label: 'Project 3 Location', selector: '[data-field=projects-card3-location]', type: 'text', defaultVal: 'Oman' },
       { key: 'projects-card3-badge', label: 'Project 3 Category', selector: '[data-field=projects-card3-badge]', type: 'text', defaultVal: 'Infrastructure' },
       { key: 'projects-card3-img', label: 'Project 3 Image', selector: '[data-field=projects-card3-img]', type: 'image', attr: 'src', defaultVal: '' },
       { key: 'projects-card3-readmore-slug', label: 'Project 3 Read More Slug', selector: '[data-field=projects-card3-readmore]', type: 'text', defaultVal: 'road-infrastructure' },
 
       { key: 'projects-card4-title', label: 'Project 4 Title', selector: '[data-field=projects-card4-title]', type: 'text', defaultVal: 'Asphalt Paving Works' },
-      { key: 'projects-card4-desc', label: 'Project 4 Description', selector: '[data-field=projects-card4-desc]', type: 'textarea', defaultVal: 'Asphalt paving with modern equipment' },
+      { key: 'projects-card4-desc', label: 'Project 4 Description', selector: '[data-field=projects-card4-desc]', type: 'richtext', defaultVal: 'Asphalt paving with modern equipment' },
       { key: 'projects-card4-location', label: 'Project 4 Location', selector: '[data-field=projects-card4-location]', type: 'text', defaultVal: 'Oman' },
       { key: 'projects-card4-badge', label: 'Project 4 Category', selector: '[data-field=projects-card4-badge]', type: 'text', defaultVal: 'Infrastructure' },
       { key: 'projects-card4-img', label: 'Project 4 Image', selector: '[data-field=projects-card4-img]', type: 'image', attr: 'src', defaultVal: '' },
       { key: 'projects-card4-readmore-slug', label: 'Project 4 Read More Slug', selector: '[data-field=projects-card4-readmore]', type: 'text', defaultVal: 'asphalt-paving' },
 
       { key: 'projects-card5-title', label: 'Project 5 Title', selector: '[data-field=projects-card5-title]', type: 'text', defaultVal: 'Underground Pipe Installation' },
-      { key: 'projects-card5-desc', label: 'Project 5 Description', selector: '[data-field=projects-card5-desc]', type: 'textarea', defaultVal: 'Water and sewage pipe installation' },
+      { key: 'projects-card5-desc', label: 'Project 5 Description', selector: '[data-field=projects-card5-desc]', type: 'richtext', defaultVal: 'Water and sewage pipe installation' },
       { key: 'projects-card5-location', label: 'Project 5 Location', selector: '[data-field=projects-card5-location]', type: 'text', defaultVal: 'Oman' },
       { key: 'projects-card5-badge', label: 'Project 5 Category', selector: '[data-field=projects-card5-badge]', type: 'text', defaultVal: 'Infrastructure' },
       { key: 'projects-card5-img', label: 'Project 5 Image', selector: '[data-field=projects-card5-img]', type: 'image', attr: 'src', defaultVal: '' },
       { key: 'projects-card5-readmore-slug', label: 'Project 5 Read More Slug', selector: '[data-field=projects-card5-readmore]', type: 'text', defaultVal: 'pipe-installation' },
 
       { key: 'projects-card6-title', label: 'Project 6 Title', selector: '[data-field=projects-card6-title]', type: 'text', defaultVal: 'Concrete Formwork' },
-      { key: 'projects-card6-desc', label: 'Project 6 Description', selector: '[data-field=projects-card6-desc]', type: 'textarea', defaultVal: 'Concrete formwork and reinforcement works' },
+      { key: 'projects-card6-desc', label: 'Project 6 Description', selector: '[data-field=projects-card6-desc]', type: 'richtext', defaultVal: 'Concrete formwork and reinforcement works' },
       { key: 'projects-card6-location', label: 'Project 6 Location', selector: '[data-field=projects-card6-location]', type: 'text', defaultVal: 'Oman' },
       { key: 'projects-card6-badge', label: 'Project 6 Category', selector: '[data-field=projects-card6-badge]', type: 'text', defaultVal: 'Infrastructure' },
       { key: 'projects-card6-img', label: 'Project 6 Image', selector: '[data-field=projects-card6-img]', type: 'image', attr: 'src', defaultVal: '' },
@@ -469,8 +469,8 @@
       { key: 'project-detail-category', label: 'Category', selector: '[data-field=project-detail-category]', type: 'text', defaultVal: '' },
       { key: 'project-detail-client', label: 'Client', selector: '[data-field=project-detail-client]', type: 'text', defaultVal: '' },
       { key: 'project-detail-year', label: 'Year', selector: '[data-field=project-detail-year]', type: 'text', defaultVal: '' },
-      { key: 'project-detail-content', label: 'Full Description', selector: '[data-field=project-detail-content]', type: 'textarea', defaultVal: '' },
-      { key: 'project-detail-scope', label: 'Scope of Work', selector: '[data-field=project-detail-scope]', type: 'textarea', defaultVal: '' },
+      { key: 'project-detail-content', label: 'Full Description', selector: '[data-field=project-detail-content]', type: 'richtext', defaultVal: '' },
+      { key: 'project-detail-scope', label: 'Scope of Work', selector: '[data-field=project-detail-scope]', type: 'richtext', defaultVal: '' },
       { key: 'project-detail-img2', label: 'Gallery Image 2', selector: '[data-field=project-detail-img2]', type: 'image', attr: 'src', defaultVal: '' },
       { key: 'project-detail-img3', label: 'Gallery Image 3', selector: '[data-field=project-detail-img3]', type: 'image', attr: 'src', defaultVal: '' }
     ],
@@ -478,9 +478,9 @@
       { key: 'service-detail-title', label: 'Service Title', selector: '[data-field=service-detail-title]', type: 'text', defaultVal: '' },
       { key: 'service-detail-subtitle', label: 'Subtitle / Tagline', selector: '[data-field=service-detail-subtitle]', type: 'text', defaultVal: '' },
       { key: 'service-detail-hero-img', label: 'Hero Image', selector: '[data-field=service-detail-hero-img]', type: 'image', attr: 'src', defaultVal: '' },
-      { key: 'service-detail-content', label: 'Full Description', selector: '[data-field=service-detail-content]', type: 'textarea', defaultVal: '' },
-      { key: 'service-detail-features', label: 'Key Features / Capabilities', selector: '[data-field=service-detail-features]', type: 'textarea', defaultVal: '' },
-      { key: 'service-detail-process', label: 'Our Process / Approach', selector: '[data-field=service-detail-process]', type: 'textarea', defaultVal: '' },
+      { key: 'service-detail-content', label: 'Full Description', selector: '[data-field=service-detail-content]', type: 'richtext', defaultVal: '' },
+      { key: 'service-detail-features', label: 'Key Features / Capabilities', selector: '[data-field=service-detail-features]', type: 'richtext', defaultVal: '' },
+      { key: 'service-detail-process', label: 'Our Process / Approach', selector: '[data-field=service-detail-process]', type: 'richtext', defaultVal: '' },
       { key: 'service-detail-img2', label: 'Gallery Image 2', selector: '[data-field=service-detail-img2]', type: 'image', attr: 'src', defaultVal: '' },
       { key: 'service-detail-img3', label: 'Gallery Image 3', selector: '[data-field=service-detail-img3]', type: 'image', attr: 'src', defaultVal: '' }
     ],
@@ -957,6 +957,19 @@
         } else if (f.type === 'textarea') {
           fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + '</label>' +
             '<textarea class="form-textarea live-edit-field" data-key="' + f.key + '" data-selector="' + f.selector + '" data-testid="field-' + f.key + '">' + val + '</textarea></div>';
+        } else if (f.type === 'richtext') {
+          var rtHtml = (typeof rteInitialHtml === 'function') ? rteInitialHtml(val || '') : (val || '');
+          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + '</label>' +
+            '<div class="rte-mini-toolbar" data-rte-target="rte-' + f.key + '" style="display:flex;gap:4px;flex-wrap:wrap;background:#f1f5f9;border:1px solid #e2e8f0;border-bottom:none;border-radius:6px 6px 0 0;padding:4px">' +
+              '<button type="button" class="rte-mini-btn" data-cmd="bold" title="Bold" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer;font-weight:700">B</button>' +
+              '<button type="button" class="rte-mini-btn" data-cmd="italic" title="Italic" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer;font-style:italic">I</button>' +
+              '<button type="button" class="rte-mini-btn" data-cmd="underline" title="Underline" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer;text-decoration:underline">U</button>' +
+              '<button type="button" class="rte-mini-btn" data-cmd="insertUnorderedList" title="Bulleted list" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer">&bull; List</button>' +
+              '<button type="button" class="rte-mini-btn" data-cmd="insertOrderedList" title="Numbered list" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer">1. List</button>' +
+              '<button type="button" class="rte-mini-btn" data-cmd="removeFormat" title="Clear formatting" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer">Clear</button>' +
+            '</div>' +
+            '<div class="rte-editor rte-mini-editor live-edit-richtext" id="rte-' + f.key + '" contenteditable="true" data-key="' + f.key + '" data-selector="' + f.selector + '" data-testid="field-' + f.key + '" style="min-height:120px;border:1px solid #e2e8f0;border-radius:0 0 6px 6px;padding:10px 12px;background:#fff;font-size:14px;line-height:1.6;outline:none">' + rtHtml + '</div>' +
+          '</div>';
         } else {
           fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + '</label>' +
             '<input class="form-input live-edit-field" data-key="' + f.key + '" data-selector="' + f.selector + '" value="' + val.replace(/"/g, '&quot;') + '" data-testid="field-' + f.key + '" /></div>';
@@ -1056,6 +1069,38 @@
         var value = this.value;
         state.editedContent[key] = value;
         updatePreviewElement(selector, value, key);
+      });
+    });
+
+    document.querySelectorAll('.live-edit-richtext').forEach(function(editor) {
+      editor.addEventListener('input', function() {
+        var key = this.getAttribute('data-key');
+        var selector = this.getAttribute('data-selector');
+        var value = this.innerHTML;
+        state.editedContent[key] = value;
+        updatePreviewElement(selector, value, key);
+      });
+      editor.addEventListener('blur', function() {
+        var key = this.getAttribute('data-key');
+        state.editedContent[key] = this.innerHTML;
+      });
+    });
+
+    document.querySelectorAll('.rte-mini-toolbar .rte-mini-btn').forEach(function(btn) {
+      btn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        var toolbar = this.closest('.rte-mini-toolbar');
+        var targetId = toolbar && toolbar.getAttribute('data-rte-target');
+        var editor = targetId && document.getElementById(targetId);
+        if (!editor) return;
+        editor.focus();
+        var cmd = this.getAttribute('data-cmd');
+        try { document.execCommand(cmd, false, null); } catch(err) {}
+        var key = editor.getAttribute('data-key');
+        var selector = editor.getAttribute('data-selector');
+        state.editedContent[key] = editor.innerHTML;
+        updatePreviewElement(selector, editor.innerHTML, key);
       });
     });
 
@@ -1590,7 +1635,12 @@
     try {
       var el = iframe.contentDocument.querySelector(selector);
       if (el) {
-        el.textContent = value;
+        var hasHtml = typeof value === 'string' && /<[a-z][\s\S]*>/i.test(value);
+        if (hasHtml) {
+          el.innerHTML = value;
+        } else {
+          el.textContent = value;
+        }
         el.style.outline = '2px solid #0ea5e9';
         el.style.outlineOffset = '2px';
         setTimeout(function() { el.style.outline = ''; el.style.outlineOffset = ''; }, 800);

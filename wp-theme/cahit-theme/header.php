@@ -36,7 +36,7 @@
 <nav class="navbar sticky" id="main-nav">
   <div class="container navbar-inner">
     <a href="<?php echo esc_url(home_url('/')); ?>" class="navbar-logo">
-      <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/EILLLBYLeCNrUbzF.png" alt="Cahit Logo" class="logo-img">
+      <img src="/assets/images/cahit-logo.jpeg" alt="Cahit Trading & Contracting LLC Logo" class="logo-img">
     </a>
     <div class="nav-links" id="nav-links">
       <a href="<?php echo esc_url(home_url('/')); ?>" class="nav-link<?php if (is_front_page()) echo ' active'; ?>">Home</a>

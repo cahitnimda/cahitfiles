@@ -3,7 +3,7 @@
   <div class="container">
     <div class="footer-grid">
       <div class="footer-col">
-        <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/EILLLBYLeCNrUbzF.png" alt="Cahit Logo" class="footer-logo">
+        <img src="/assets/images/cahit-logo.jpeg" alt="Cahit Trading & Contracting LLC Logo" class="footer-logo">
         <p class="footer-desc">Cahit Trading &amp; Contracting LLC is a construction and infrastructure company delivering marine, coastal, and civil engineering solutions across Oman. With experienced leadership and skilled engineering teams, we execute complex projects with reliability, precision, and the highest standards of quality and safety.</p>
       </div>
 

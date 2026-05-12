@@ -47,6 +47,169 @@ async function dbGetLeads() {
 const app = express();
 const PORT = 5000;
 
+// ===== SEO =====
+const SITE_URL = process.env.SITE_URL || 'https://cahitcontracting.com';
+const DEFAULT_OG_IMAGE = 'https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/EILLLBYLeCNrUbzF.png';
+
+const SEO_PAGES = {
+  '/': {
+    title: 'Marine & Coastal Construction Company in Oman | Cahit Trading & Contracting LLC',
+    description: 'Cahit Trading & Contracting LLC — leading marine and coastal construction company in Oman. Breakwaters, quay walls, dredging, dewatering, civil infrastructure and MEP across the Sultanate of Oman. Based in Muscat since 2009.'
+  },
+  '/about': {
+    title: 'About Us | Marine Construction Contractor in Oman | Cahit Contracting',
+    description: 'Learn about Cahit Trading & Contracting LLC — a marine and coastal construction company headquartered in Muscat, Oman, delivering infrastructure projects across the Sultanate since 2009.'
+  },
+  '/services': {
+    title: 'Marine & Coastal Construction Services in Oman | Breakwaters, Dredging, Dewatering',
+    description: 'Marine construction, coastal protection, dredging, earthworks, dewatering, civil infrastructure and MEP services across Oman. Request a quote from Cahit Trading & Contracting LLC.'
+  },
+  '/projects': {
+    title: 'Marine & Civil Construction Projects in Oman | Cahit Contracting Portfolio',
+    description: 'Selected marine, coastal and civil construction projects delivered by Cahit Trading & Contracting across the Sultanate of Oman — breakwaters, quay walls, dredging and infrastructure.'
+  },
+  '/clients': {
+    title: 'Our Clients | Cahit Trading & Contracting LLC – Oman',
+    description: 'Trusted by leading government bodies, oil & gas operators and developers across Oman for marine, coastal and civil construction.'
+  },
+  '/blog': {
+    title: 'Insights on Marine & Coastal Construction in Oman | Cahit Blog',
+    description: 'Articles, case studies and insights on marine, coastal and civil construction in the Sultanate of Oman from Cahit Trading & Contracting LLC.'
+  },
+  '/careers': {
+    title: 'Careers at Cahit Trading & Contracting | Construction Jobs in Oman',
+    description: 'Join Cahit Contracting — explore engineering and construction career opportunities in Muscat and across the Sultanate of Oman.'
+  }
+};
+
+function escSeo(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function buildJsonLd(route) {
+  const org = {
+    '@context': 'https://schema.org',
+    '@type': 'GeneralContractor',
+    '@id': SITE_URL + '/#organization',
+    name: 'Cahit Trading & Contracting LLC',
+    alternateName: 'Cahit Contracting',
+    url: SITE_URL,
+    logo: DEFAULT_OG_IMAGE,
+    image: DEFAULT_OG_IMAGE,
+    description: 'Marine and coastal construction company in Oman specialising in breakwaters, quay walls, dredging, dewatering, civil infrastructure and MEP.',
+    foundingDate: '2009',
+    telephone: '+968 24062411',
+    email: 'ctc@cahitcontracting.com',
+    priceRange: '$$$',
+    areaServed: [
+      { '@type': 'Country', name: 'Oman' },
+      { '@type': 'AdministrativeArea', name: 'Muscat Governorate' }
+    ],
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: 'Khaleej Tower, 6th Floor No. 603, Ghala',
+      addressLocality: 'Muscat',
+      addressRegion: 'Muscat Governorate',
+      postalCode: '',
+      addressCountry: 'OM'
+    },
+    geo: { '@type': 'GeoCoordinates', latitude: 23.5859, longitude: 58.4059 },
+    sameAs: [],
+    knowsAbout: [
+      'Marine construction', 'Coastal construction', 'Breakwater construction',
+      'Quay wall construction', 'Dredging', 'Dewatering',
+      'Civil infrastructure', 'Earthworks', 'MEP'
+    ],
+    serviceArea: { '@type': 'Country', name: 'Oman' }
+  };
+
+  const website = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    '@id': SITE_URL + '/#website',
+    url: SITE_URL,
+    name: 'Cahit Trading & Contracting LLC',
+    publisher: { '@id': SITE_URL + '/#organization' },
+    inLanguage: ['en', 'ar']
+  };
+
+  const blocks = [org, website];
+
+  // Breadcrumbs
+  if (route && route !== '/') {
+    const seg = route.split('/').filter(Boolean);
+    const crumbs = [{ '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL + '/' }];
+    let acc = '';
+    seg.forEach((s, i) => {
+      acc += '/' + s;
+      crumbs.push({
+        '@type': 'ListItem',
+        position: i + 2,
+        name: s.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        item: SITE_URL + acc
+      });
+    });
+    blocks.push({ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: crumbs });
+  }
+
+  // Services list on /services
+  if (route === '/services') {
+    const services = [
+      { name: 'Marine Construction', description: 'Breakwaters, quay walls, revetments and coastal protection in Oman.' },
+      { name: 'Civil Infrastructure', description: 'Civil infrastructure development across the Sultanate of Oman.' },
+      { name: 'Earthworks', description: 'Bulk excavation, grading, compaction and site preparation.' },
+      { name: 'Dewatering', description: 'Site dewatering services for marine and civil projects in Oman.' },
+      { name: 'MEP', description: 'Mechanical, electrical and plumbing for industrial and infrastructure projects.' }
+    ];
+    services.forEach(s => blocks.push({
+      '@context': 'https://schema.org',
+      '@type': 'Service',
+      name: s.name,
+      description: s.description,
+      provider: { '@id': SITE_URL + '/#organization' },
+      areaServed: { '@type': 'Country', name: 'Oman' }
+    }));
+  }
+
+  return blocks.map(b => `<script type="application/ld+json">${JSON.stringify(b)}</script>`).join('\n');
+}
+
+function injectSeo(html, route, overrides) {
+  const cfg = Object.assign({}, SEO_PAGES[route] || SEO_PAGES['/'], overrides || {});
+  const title = escSeo(cfg.title);
+  const desc = escSeo(cfg.description);
+  const canonical = SITE_URL + route;
+  const image = cfg.image || DEFAULT_OG_IMAGE;
+
+  // Replace <title>
+  html = html.replace(/<title>[\s\S]*?<\/title>/i, '<title>' + title + '</title>');
+  // Replace meta description
+  html = html.replace(/<meta\s+name="description"[^>]*>/i, '<meta name="description" content="' + desc + '">');
+  // Replace canonical
+  html = html.replace(/<link\s+rel="canonical"[^>]*>/i, '<link rel="canonical" href="' + canonical + '">');
+  // Replace OG title/description/url
+  html = html.replace(/<meta\s+property="og:title"[^>]*>/i, '<meta property="og:title" content="' + title + '">');
+  html = html.replace(/<meta\s+property="og:description"[^>]*>/i, '<meta property="og:description" content="' + desc + '">');
+  html = html.replace(/<meta\s+property="og:url"[^>]*>/i, '<meta property="og:url" content="' + canonical + '">');
+  html = html.replace(/<meta\s+property="og:image"[^>]*>/i, '<meta property="og:image" content="' + image + '">');
+  // Replace Twitter
+  html = html.replace(/<meta\s+name="twitter:title"[^>]*>/i, '<meta name="twitter:title" content="' + title + '">');
+  html = html.replace(/<meta\s+name="twitter:description"[^>]*>/i, '<meta name="twitter:description" content="' + desc + '">');
+  html = html.replace(/<meta\s+name="twitter:image"[^>]*>/i, '<meta name="twitter:image" content="' + image + '">');
+  // Replace hreflang
+  html = html.replace(/<link\s+rel="alternate"\s+hreflang="en"[^>]*>/i, '<link rel="alternate" hreflang="en" href="' + canonical + '">');
+  html = html.replace(/<link\s+rel="alternate"\s+hreflang="ar"[^>]*>/i, '<link rel="alternate" hreflang="ar" href="' + canonical + '">');
+  html = html.replace(/<link\s+rel="alternate"\s+hreflang="x-default"[^>]*>/i, '<link rel="alternate" hreflang="x-default" href="' + canonical + '">');
+
+  // Inject JSON-LD just before </head>
+  const ld = buildJsonLd(route);
+  html = html.replace(/<\/head>/i, ld + '\n</head>');
+
+  return html;
+}
+// ===== /SEO =====
+
+
 const DATA_DIR = process.env.VERCEL ? '/tmp' : __dirname;
 const CREDENTIALS_FILE = path.join(DATA_DIR, 'admin-credentials.json');
 function loadCredentials() {
@@ -1511,6 +1674,7 @@ app.get('/', async (req, res) => {
   const content = readThemeFile('front-page.php');
   let html = executePhpTemplate(content, 'home');
   html = await applySavedContent(html, ['hero', 'logos', 'about-preview', 'services', 'marine', 'stats', 'projects', 'leadership', 'cta', 'header', 'footer']);
+  html = injectSeo(html, '/');
   res.send(html);
 });
 
@@ -1518,6 +1682,7 @@ app.get('/about', async (req, res) => {
   const content = readThemeFile('page-about.php');
   let html = executePhpTemplate(content, 'about');
   html = await applySavedContent(html, ['about-hero', 'about-overview', 'about-mission', 'about-leadership', 'about-commitment', 'about-clients', 'header', 'footer']);
+  html = injectSeo(html, '/about');
   res.send(html);
 });
 
@@ -1529,6 +1694,7 @@ app.get('/services', async (req, res) => {
   const cardsHtml = renderServiceCardsHtml(cards);
   html = html.replace(/<div class="services-grid">[\s\S]*?<\/div>\s*<\/div>\s*<\/section>/m,
     '<div class="services-grid">' + cardsHtml + '</div></div></section>');
+  html = injectSeo(html, '/services');
   res.send(html);
 });
 
@@ -1540,6 +1706,7 @@ app.get('/projects', async (req, res) => {
   const cardsHtml = renderProjectCardsHtml(cards);
   html = html.replace(/<div class="projects-grid">[\s\S]*?<\/div>\s*<\/div>\s*<\/section>/m,
     '<div class="projects-grid">' + cardsHtml + '</div></div></section>');
+  html = injectSeo(html, '/projects');
   res.send(html);
 });
 
@@ -1547,6 +1714,7 @@ app.get('/clients', async (req, res) => {
   const content = readThemeFile('page-clients.php');
   let html = executePhpTemplate(content, 'clients');
   html = await applySavedContent(html, ['clients-hero', 'clients-grid', 'clients-sectors', 'header', 'footer']);
+  html = injectSeo(html, '/clients');
   res.send(html);
 });
 
@@ -1587,7 +1755,68 @@ app.get('/careers', async (req, res) => {
   const content = readThemeFile('page-careers.php');
   let html = executePhpTemplate(content, 'careers');
   html = await applySavedContent(html, ['careers-hero', 'careers-intro', 'careers-cta', 'header', 'footer']);
+  html = injectSeo(html, '/careers');
   res.send(html);
+});
+
+// SEO: robots.txt
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain').send(
+    'User-agent: *\n' +
+    'Allow: /\n' +
+    'Disallow: /admin\n' +
+    'Disallow: /admin/\n' +
+    'Disallow: /api/\n' +
+    '\n' +
+    'Sitemap: ' + SITE_URL + '/sitemap.xml\n'
+  );
+});
+
+// SEO: sitemap.xml (dynamic - includes published blog posts + service/project detail pages)
+app.get('/sitemap.xml', async (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const urls = [
+    { loc: '/', priority: '1.0', changefreq: 'weekly' },
+    { loc: '/about', priority: '0.8', changefreq: 'monthly' },
+    { loc: '/services', priority: '0.9', changefreq: 'monthly' },
+    { loc: '/projects', priority: '0.9', changefreq: 'monthly' },
+    { loc: '/clients', priority: '0.6', changefreq: 'monthly' },
+    { loc: '/blog', priority: '0.8', changefreq: 'weekly' },
+    { loc: '/careers', priority: '0.5', changefreq: 'monthly' }
+  ];
+  try {
+    if (typeof getServiceCards === 'function') {
+      const svcs = await getServiceCards();
+      svcs.forEach(s => { if (s.slug) urls.push({ loc: '/services/' + s.slug, priority: '0.7', changefreq: 'monthly' }); });
+    }
+    if (typeof getProjectCards === 'function') {
+      const projs = await getProjectCards();
+      projs.forEach(p => { if (p.slug) urls.push({ loc: '/projects/' + p.slug, priority: '0.7', changefreq: 'monthly' }); });
+    }
+    if (dbPool) {
+      const r = await dbQuery("SELECT slug, updated_at FROM blog_posts WHERE status='published' ORDER BY updated_at DESC");
+      if (r && r.rows) {
+        r.rows.forEach(p => {
+          if (p.slug) urls.push({
+            loc: '/blog/' + p.slug,
+            lastmod: (p.updated_at ? new Date(p.updated_at).toISOString().slice(0,10) : today),
+            priority: '0.6', changefreq: 'monthly'
+          });
+        });
+      }
+    }
+  } catch (e) { console.error('sitemap build error:', e.message); }
+
+  const xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+    urls.map(u =>
+      '  <url><loc>' + SITE_URL + u.loc + '</loc>' +
+      '<lastmod>' + (u.lastmod || today) + '</lastmod>' +
+      '<changefreq>' + u.changefreq + '</changefreq>' +
+      '<priority>' + u.priority + '</priority></url>'
+    ).join('\n') +
+    '\n</urlset>\n';
+  res.type('application/xml').send(xml);
 });
 
 app.get('/blog/:slug', async (req, res) => {
@@ -1632,7 +1861,13 @@ app.get('/blog/:slug', async (req, res) => {
           </div>
         </div>
       </section>`;
-    res.send(header + postHtml + footer);
+    let outHtml = header + postHtml + footer;
+    outHtml = injectSeo(outHtml, '/blog/' + req.params.slug, {
+      title: post.title + ' | Cahit Contracting Blog',
+      description: (post.excerpt || post.title || '').toString().slice(0, 200),
+      image: post.image_url || DEFAULT_OG_IMAGE
+    });
+    res.send(outHtml);
   } catch (e) {
     const content = readThemeFile('404.php');
     res.status(500).send(executePhpTemplate(content, '404'));
@@ -1721,7 +1956,13 @@ app.get('/projects/:slug', async (req, res) => {
           </div>
         </div>
       </section>`;
-    res.send(header + detailHtml + footer);
+    let outHtml = header + detailHtml + footer;
+    outHtml = injectSeo(outHtml, '/projects/' + slug, {
+      title: title + ' | ' + (category || 'Construction Project') + ' in Oman | Cahit Contracting',
+      description: (subtitle || (title + ' — a ' + (category || 'construction') + ' project delivered by Cahit Trading & Contracting in ' + (location || 'Oman') + '.')).toString().slice(0, 200),
+      image: heroImg || DEFAULT_OG_IMAGE
+    });
+    res.send(outHtml);
   } catch (e) {
     console.error('Project detail error:', e.message);
     const content = readThemeFile('404.php');
@@ -1803,7 +2044,13 @@ app.get('/services/:slug', async (req, res) => {
           <button onclick="openContactPopup();" class="btn btn-white">Contact Our Team</button>
         </div>
       </section>`;
-    res.send(header + detailHtml + footer);
+    let outHtml = header + detailHtml + footer;
+    outHtml = injectSeo(outHtml, '/services/' + slug, {
+      title: title + ' in Oman | Cahit Trading & Contracting LLC',
+      description: (subtitle || (title + ' services across the Sultanate of Oman by Cahit Trading & Contracting LLC.')).toString().slice(0, 200),
+      image: heroImg || DEFAULT_OG_IMAGE
+    });
+    res.send(outHtml);
   } catch (e) {
     console.error('Service detail error:', e.message);
     const content = readThemeFile('404.php');

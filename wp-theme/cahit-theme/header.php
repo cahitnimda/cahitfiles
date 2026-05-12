@@ -3,10 +3,31 @@
 <head>
   <meta charset="<?php bloginfo('charset'); ?>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Cahit Trading & Contracting LLC - A Solid Ground For Your Project. Construction and infrastructure company in Oman.">
-  <meta property="og:title" content="Cahit Trading & Contracting LLC">
-  <meta property="og:description" content="Construction and infrastructure company operating in the Sultanate of Oman since 2009.">
+  <title>Marine &amp; Coastal Construction Company in Oman | Cahit Trading &amp; Contracting LLC</title>
+  <meta name="description" content="Cahit Trading &amp; Contracting LLC is a leading marine and coastal construction company in Oman. Breakwaters, quay walls, dredging, dewatering, civil infrastructure and MEP across the Sultanate of Oman. Based in Muscat since 2009.">
+  <meta name="keywords" content="marine construction Oman, marine contractor Oman, coastal construction Oman, breakwater Oman, quay wall Oman, dredging Oman, dewatering Oman, civil construction Oman, infrastructure company Oman, construction company Muscat, Cahit Contracting">
+  <meta name="author" content="Cahit Trading &amp; Contracting LLC">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+  <meta name="geo.region" content="OM-MA">
+  <meta name="geo.placename" content="Muscat, Oman">
+  <meta name="geo.position" content="23.5859;58.4059">
+  <meta name="ICBM" content="23.5859, 58.4059">
+  <link rel="canonical" href="https://cahitcontracting.com/">
   <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Cahit Trading &amp; Contracting LLC">
+  <meta property="og:title" content="Marine &amp; Coastal Construction Company in Oman | Cahit Contracting">
+  <meta property="og:description" content="Leading marine and coastal construction company in Oman. Breakwaters, quay walls, dredging, civil infrastructure and MEP across the Sultanate of Oman.">
+  <meta property="og:url" content="https://cahitcontracting.com/">
+  <meta property="og:image" content="https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/EILLLBYLeCNrUbzF.png">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="ar_OM">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Marine &amp; Coastal Construction Company in Oman | Cahit Contracting">
+  <meta name="twitter:description" content="Leading marine and coastal construction company in Oman. Breakwaters, quay walls, dredging, civil infrastructure and MEP.">
+  <meta name="twitter:image" content="https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/EILLLBYLeCNrUbzF.png">
+  <link rel="alternate" hreflang="en" href="https://cahitcontracting.com/">
+  <link rel="alternate" hreflang="ar" href="https://cahitcontracting.com/">
+  <link rel="alternate" hreflang="x-default" href="https://cahitcontracting.com/">
   <?php wp_head(); ?>
 </head>
 <body <?php body_class(); ?>>

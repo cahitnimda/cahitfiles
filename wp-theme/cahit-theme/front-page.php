@@ -16,7 +16,7 @@
           <span class="text-cyan-200 hero-title-line">Excellence</span>
         </h1>
         <p class="hero-subtitle" data-testid="text-hero-subtitle">
-          Marine &amp; Coastal Construction Experts
+          Marine &amp; Coastal Construction Company in Oman
         </p>
         <div class="hero-buttons">
           <button class="btn btn-white" data-testid="button-hero-consultation" onclick="if(typeof openConsultation==='function'){openConsultation();}">

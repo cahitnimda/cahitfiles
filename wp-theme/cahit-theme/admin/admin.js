@@ -35,6 +35,15 @@
     dragMode: false
   };
 
+  function getAdminToken() {
+    return sessionStorage.getItem('cahit_admin_token') || localStorage.getItem('cahit_admin_token') || '';
+  }
+  function authHeaders(extra) {
+    var h = { 'Authorization': 'Bearer ' + getAdminToken() };
+    if (extra) { for (var k in extra) { if (Object.prototype.hasOwnProperty.call(extra, k)) h[k] = extra[k]; } }
+    return h;
+  }
+
   var BASE_URL = 'https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/';
   var mediaImages = {
     'marine-construction.png': 'EGRSgZmJXJSrWKJY.png',
@@ -56,7 +65,7 @@
   }
 
   function loadLeads() {
-    fetch('/admin/api/leads').then(function(r) { return r.json(); }).then(function(data) {
+    fetch('/admin/api/leads', { headers: authHeaders() }).then(function(r) { return r.json(); }).then(function(data) {
       if (data.success) { state.leads = data.data; if (state.currentPage === 'dashboard' || state.currentPage === 'leads') renderPage(state.currentPage); }
     }).catch(function() {});
   }
@@ -87,7 +96,7 @@
   }
 
   function loadSiteSettings() {
-    fetch('/admin/api/site-content/settings').then(function(r) { return r.json(); }).then(function(d) {
+    fetch('/admin/api/site-content/settings', { headers: authHeaders() }).then(function(r) { return r.json(); }).then(function(d) {
       if (d.success && d.data) { state.siteSettings = d.data; }
     }).catch(function() {});
   }
@@ -95,7 +104,7 @@
   function loadSavedSectionContent(section) {
     var isDetail = (section === 'project-detail' || section === 'service-detail');
     var loadKey = isDetail ? section + '-' + (state.detailSlug || '') : section;
-    fetch('/admin/api/site-content/' + loadKey).then(function(r) { return r.json(); }).then(function(d) {
+    fetch('/admin/api/site-content/' + loadKey, { headers: authHeaders() }).then(function(r) { return r.json(); }).then(function(d) {
       if (d.success && d.data) {
         var data = d.data;
         Object.keys(data).forEach(function(key) {
@@ -831,7 +840,7 @@
         if (!this.files || !this.files[0]) return;
         var formData = new FormData();
         formData.append('file', this.files[0]);
-        fetch('/admin/api/upload', { method: 'POST', body: formData })
+        fetch('/admin/api/upload', { method: 'POST', headers: authHeaders(), body: formData })
           .then(function(r) { return r.json(); })
           .then(function(result) {
             if (result.success && result.url) {
@@ -853,7 +862,7 @@
         saveAllBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Saving...';
         fetch('/admin/api/dynamic-cards/' + type, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ cards: cards })
         }).then(function(r) { return r.json(); }).then(function(result) {
           saveAllBtn.disabled = false;
@@ -873,10 +882,10 @@
   }
 
   function loadDynamicCards() {
-    fetch('/admin/api/dynamic-cards/projects').then(function(r) { return r.json(); }).then(function(d) {
+    fetch('/admin/api/dynamic-cards/projects', { headers: authHeaders() }).then(function(r) { return r.json(); }).then(function(d) {
       if (d.success && d.cards) state.projectCards = d.cards;
     }).catch(function() {});
-    fetch('/admin/api/dynamic-cards/services').then(function(r) { return r.json(); }).then(function(d) {
+    fetch('/admin/api/dynamic-cards/services', { headers: authHeaders() }).then(function(r) { return r.json(); }).then(function(d) {
       if (d.success && d.cards) state.serviceCards = d.cards;
     }).catch(function() {});
   }
@@ -1183,7 +1192,7 @@
         state.detailSlug = this.value;
         state.editedContent = {};
         var saveKey = state.editingSection + '-' + state.detailSlug;
-        fetch('/admin/api/site-content/' + saveKey)
+        fetch('/admin/api/site-content/' + saveKey, { headers: authHeaders() })
           .then(function(r) { return r.json(); })
           .then(function(result) {
             if (result.success && result.data) {
@@ -1217,7 +1226,7 @@
         saveBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Saving...';
         fetch('/admin/api/site-content/' + saveKey, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ data: data })
         }).then(function(r) { return r.json(); }).then(function(result) {
           saveBtn.disabled = false;
@@ -1916,7 +1925,7 @@
   }
 
   function loadAnalyticsData() {
-    fetch('/admin/api/analytics').then(function(r) { return r.json(); }).then(function(result) {
+    fetch('/admin/api/analytics', { headers: authHeaders() }).then(function(r) { return r.json(); }).then(function(result) {
       if (!result.success || !result.data) {
         document.getElementById('analytics-content').innerHTML = '<div style="text-align:center;padding:60px;color:#64748b"><p>Unable to load analytics data.</p></div>';
         return;
@@ -2100,8 +2109,9 @@
           '<p class="settings-row-desc" style="margin-top:4px">Powers both the AI Chatbot and AI Assistant (blog generation, content suggestions). Get your key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" style="color:#0ea5e9;text-decoration:underline">platform.openai.com</a></p>' +
         '</div>' +
       '</div>' +
-      '<div style="margin-top:24px;display:flex;gap:12px;align-items:center">' +
+      '<div style="margin-top:24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
         '<button class="btn btn-primary" id="saveKnowledgeBtn" data-testid="button-save-knowledge">Save All Settings</button>' +
+        '<button class="btn" id="clearChatbotKeyBtn" data-testid="button-clear-chatbot-key" style="display:none;background:#ef4444;color:#fff;border:none">Clear API key</button>' +
         '<button class="btn" id="exportKnowledgeBtn" data-testid="button-export-knowledge" style="background:#f1f5f9;color:#334155;border:1px solid #e2e8f0">Export for Vercel</button>' +
       '</div>' +
       '<div id="export-result" style="display:none;margin-top:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px">' +
@@ -2136,15 +2146,61 @@
         addKnowledgeEntry(document.getElementById('knowledge-entries'), '', '');
       });
 
-    fetch('/admin/api/openai-key-status', { headers: { 'Authorization': 'Bearer ' + token } })
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        var ks = document.getElementById('chatbot-key-status');
-        if (ks) {
-          if (d.hasKey) { ks.textContent = 'Key configured: ' + d.maskedKey; ks.style.color = '#22c55e'; }
-          else { ks.textContent = 'No API key configured'; ks.style.color = '#ef4444'; }
-        }
-      }).catch(function() {});
+    function refreshChatbotKeyStatus() {
+      return fetch('/admin/api/openai-key-status', { headers: { 'Authorization': 'Bearer ' + token } })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          var ks = document.getElementById('chatbot-key-status');
+          if (ks) {
+            if (d.hasKey) { ks.textContent = 'Key configured: ' + d.maskedKey; ks.style.color = '#22c55e'; }
+            else { ks.textContent = 'No API key configured'; ks.style.color = '#ef4444'; }
+          }
+          var clearBtn = document.getElementById('clearChatbotKeyBtn');
+          if (clearBtn) { clearBtn.style.display = d.hasKey ? 'inline-block' : 'none'; }
+        }).catch(function() {});
+    }
+    refreshChatbotKeyStatus();
+
+    var clearChatbotKeyBtn = document.getElementById('clearChatbotKeyBtn');
+    if (clearChatbotKeyBtn) {
+      clearChatbotKeyBtn.addEventListener('click', function() {
+        if (!window.confirm('Clear the stored OpenAI API key? The chatbot and AI Assistant will stop working until a new key is saved.')) return;
+        clearChatbotKeyBtn.disabled = true;
+        var originalText = clearChatbotKeyBtn.textContent;
+        clearChatbotKeyBtn.textContent = 'Clearing...';
+        fetch('/admin/api/save-openai-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ clear: true })
+        })
+        .then(function(r) {
+          if (r.status === 401) return { success: false, message: 'Session expired' };
+          return r.json();
+        })
+        .then(function(d) {
+          clearChatbotKeyBtn.disabled = false;
+          clearChatbotKeyBtn.textContent = originalText;
+          if (d && d.success === false && d.message === 'Session expired') {
+            showToast('Session expired. Please log in again.', 'error');
+            setTimeout(function() { window.location.href = '/admin/login'; }, 1500);
+            return;
+          }
+          if (d && d.success) {
+            showToast('API key cleared', 'success');
+            var keyInputEl = document.getElementById('chatbot-api-key');
+            if (keyInputEl) keyInputEl.value = '';
+            refreshChatbotKeyStatus();
+          } else {
+            showToast((d && d.message) || 'Failed to clear API key', 'error');
+          }
+        })
+        .catch(function() {
+          clearChatbotKeyBtn.disabled = false;
+          clearChatbotKeyBtn.textContent = originalText;
+          showToast('Error clearing API key', 'error');
+        });
+      });
+    }
 
     var toggleKeyBtn = document.getElementById('chatbotToggleKey');
     var keyInput = document.getElementById('chatbot-api-key');
@@ -2214,9 +2270,8 @@
         if (allOk) {
           showToast('All settings saved successfully', 'success');
           if (apiKeyVal.trim()) {
-            var ks = document.getElementById('chatbot-key-status');
-            if (ks) { ks.textContent = 'Key configured: sk-...' + apiKeyVal.trim().slice(-4); ks.style.color = '#22c55e'; }
             document.getElementById('chatbot-api-key').value = '';
+            refreshChatbotKeyStatus();
           }
         } else {
           var failedMsgs = results.filter(function(d) { return !d.success; }).map(function(d) { return d.message || 'Unknown error'; });
@@ -2473,7 +2528,7 @@
         var savePromises = [
           fetch('/admin/api/site-content/settings', {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ data: settingsData })
           }).then(function(r) { return r.json(); })
         ];
@@ -2528,7 +2583,7 @@
   window.markLeadStatus = function(id, status) {
     fetch('/admin/api/leads/' + id + '/status', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ status: status })
     }).then(function(r) { return r.json(); }).then(function(d) {
       if (d.success) {
@@ -2543,7 +2598,7 @@
   function aiBlogCall(type, topic, language, sourceText) {
     return fetch('/admin/api/ai-blog-generate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ type: type, topic: topic, language: language || 'en', sourceText: sourceText || '' })
     }).then(function(r) { return r.json(); });
   }
@@ -2948,7 +3003,7 @@
         showAiLoading('Creating cover image with AI (this may take 30-60s)...');
         fetch('/admin/api/ai-blog-image', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ prompt: imgPrompt })
         }).then(function(r) { return r.json(); }).then(function(imgD) {
           if (imgD.success) {

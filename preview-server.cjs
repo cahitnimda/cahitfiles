@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const { Pool } = require('pg');
+const bcrypt = require('bcrypt');
 
 const DB_URL = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL || '';
 const dbPool = DB_URL ? new Pool({ connectionString: DB_URL, ssl: DB_URL.includes('sslmode=disable') ? false : { rejectUnauthorized: false } }) : null;
@@ -212,35 +213,264 @@ function injectSeo(html, route, overrides) {
 
 const DATA_DIR = process.env.VERCEL ? '/tmp' : __dirname;
 const CREDENTIALS_FILE = path.join(DATA_DIR, 'admin-credentials.json');
+const BCRYPT_ROUNDS = 10;
+const DEFAULT_ADMIN_PASSWORD = 'cahit2024';
+
+function isBcryptHash(s) {
+  return typeof s === 'string' && /^\$2[aby]?\$\d{2}\$/.test(s);
+}
+function hashPassword(plain) {
+  return bcrypt.hashSync(String(plain), BCRYPT_ROUNDS);
+}
+function verifyPassword(plain, stored) {
+  if (!stored || typeof plain !== 'string') return false;
+  if (isBcryptHash(stored)) {
+    try { return bcrypt.compareSync(plain, stored); } catch (e) { return false; }
+  }
+  return plain === stored;
+}
+
 function loadCredentials() {
+  let raw = null;
   try {
     if (fs.existsSync(CREDENTIALS_FILE)) {
-      return JSON.parse(fs.readFileSync(CREDENTIALS_FILE, 'utf8'));
+      raw = JSON.parse(fs.readFileSync(CREDENTIALS_FILE, 'utf8'));
     }
   } catch (e) {}
-  return { username: 'admin', password: 'cahit2024' };
+  if (!raw || typeof raw !== 'object') raw = {};
+  const username = raw.username || 'admin';
+  let passwordHash = raw.passwordHash;
+  // Migrate legacy plaintext password field on read.
+  if (!passwordHash && raw.password) {
+    passwordHash = isBcryptHash(raw.password) ? raw.password : hashPassword(raw.password);
+    saveCredentials({ username, passwordHash });
+  }
+  if (!passwordHash) {
+    passwordHash = hashPassword(DEFAULT_ADMIN_PASSWORD);
+  }
+  return { username, passwordHash };
 }
 function saveCredentials(creds) {
-  try { fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(creds, null, 2)); } catch (e) {}
+  try {
+    const out = { username: creds.username, passwordHash: creds.passwordHash };
+    fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(out, null, 2));
+  } catch (e) {}
 }
-const TOKEN_SECRET = process.env.SESSION_SECRET || 'cahit-admin-secret-2024';
-function createAdminToken(username) {
-  const payload = username + ':' + Date.now();
+const TOKEN_SECRET_FILE = path.join(DATA_DIR, 'admin-token-secret.json');
+function loadOrCreateTokenSecret() {
+  const envSecret = process.env.SESSION_SECRET;
+  if (envSecret && envSecret.trim().length >= 16) {
+    return envSecret;
+  }
+  if (envSecret && envSecret.trim().length > 0) {
+    console.error('[admin-auth] SESSION_SECRET is set but too short (need >= 16 chars). Refusing to start.');
+    process.exit(1);
+  }
+  try {
+    if (fs.existsSync(TOKEN_SECRET_FILE)) {
+      const j = JSON.parse(fs.readFileSync(TOKEN_SECRET_FILE, 'utf8'));
+      if (j && typeof j.secret === 'string' && j.secret.length >= 32) {
+        return j.secret;
+      }
+    }
+  } catch (e) {}
+  const generated = crypto.randomBytes(48).toString('hex');
+  try {
+    fs.writeFileSync(TOKEN_SECRET_FILE, JSON.stringify({ secret: generated }, null, 2), { mode: 0o600 });
+    try { fs.chmodSync(TOKEN_SECRET_FILE, 0o600); } catch (e) {}
+    console.warn('[admin-auth] SESSION_SECRET not set; generated and persisted a random secret to ' + TOKEN_SECRET_FILE + '. Set SESSION_SECRET in the environment for production deployments.');
+  } catch (e) {
+    console.error('[admin-auth] SESSION_SECRET not set and unable to persist a generated secret (' + e.message + '). Refusing to start; please set SESSION_SECRET in the environment.');
+    process.exit(1);
+  }
+  return generated;
+}
+const TOKEN_SECRET = loadOrCreateTokenSecret();
+const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days max lifetime
+const TOKEN_VERSION_FILE = path.join(DATA_DIR, 'admin-token-version.json');
+const TOKEN_SESSIONS_FILE = path.join(DATA_DIR, 'admin-sessions.json');
+
+// Token revocation has two layers:
+//
+//   1. A monotonically increasing "version" number (per-installation). Every
+//      issued token embeds the version current at issue time; bumping the
+//      version invalidates every previously-issued token at once. Used by
+//      change-credentials so a password change kicks every device off.
+//
+//   2. A per-token allow-list ("sessions") keyed by a random token id embedded
+//      in each token. Logout removes only the calling token's id from the
+//      allow-list, leaving sessions on other devices intact. Sessions are
+//      persisted (DB when available, JSON file fallback) so revocation
+//      survives restarts; expired rows are pruned opportunistically.
+let cachedTokenVersion = null;
+function loadTokenVersionFromFile() {
+  try {
+    if (fs.existsSync(TOKEN_VERSION_FILE)) {
+      const j = JSON.parse(fs.readFileSync(TOKEN_VERSION_FILE, 'utf8'));
+      if (typeof j.version === 'number' && j.version >= 1) return j.version;
+    }
+  } catch (e) {}
+  return 1;
+}
+function saveTokenVersionToFile(v) {
+  try { fs.writeFileSync(TOKEN_VERSION_FILE, JSON.stringify({ version: v }, null, 2)); } catch (e) {}
+}
+async function getCurrentTokenVersion() {
+  if (dbPool) {
+    const v = await dbGetSetting('admin_token_version', null);
+    const n = v == null ? NaN : parseInt(v, 10);
+    if (Number.isFinite(n) && n >= 1) {
+      cachedTokenVersion = n;
+      return n;
+    }
+  }
+  if (cachedTokenVersion == null) cachedTokenVersion = loadTokenVersionFromFile();
+  return cachedTokenVersion;
+}
+async function bumpTokenVersion() {
+  const cur = await getCurrentTokenVersion();
+  const next = cur + 1;
+  cachedTokenVersion = next;
+  saveTokenVersionToFile(next);
+  if (dbPool) await dbSetSetting('admin_token_version', String(next));
+  return next;
+}
+
+// ---------- Per-token session allow-list ----------
+
+function loadSessionsFromFile() {
+  try {
+    if (fs.existsSync(TOKEN_SESSIONS_FILE)) {
+      const j = JSON.parse(fs.readFileSync(TOKEN_SESSIONS_FILE, 'utf8'));
+      if (j && typeof j.sessions === 'object' && j.sessions) return j.sessions;
+    }
+  } catch (e) {}
+  return {};
+}
+function saveSessionsToFile(sessions) {
+  try { fs.writeFileSync(TOKEN_SESSIONS_FILE, JSON.stringify({ sessions }, null, 2)); } catch (e) {}
+}
+
+async function pruneExpiredSessions() {
+  const now = Date.now();
+  if (dbPool) {
+    await dbQuery('DELETE FROM admin_sessions WHERE expires_at < $1', [new Date(now)]);
+    return;
+  }
+  const sessions = loadSessionsFromFile();
+  let changed = false;
+  for (const id of Object.keys(sessions)) {
+    if (!Number.isFinite(sessions[id]) || sessions[id] < now) {
+      delete sessions[id];
+      changed = true;
+    }
+  }
+  if (changed) saveSessionsToFile(sessions);
+}
+
+async function recordAdminSession(tokenId, username, expiresMs) {
+  if (dbPool) {
+    await dbQuery(
+      'INSERT INTO admin_sessions (token_id, username, expires_at) VALUES ($1, $2, $3) ON CONFLICT (token_id) DO UPDATE SET username = $2, expires_at = $3',
+      [tokenId, username, new Date(expiresMs)]
+    );
+    return;
+  }
+  const sessions = loadSessionsFromFile();
+  sessions[tokenId] = expiresMs;
+  saveSessionsToFile(sessions);
+}
+
+async function isSessionActive(tokenId, expiresMs) {
+  if (Date.now() > expiresMs) return false;
+  if (dbPool) {
+    const r = await dbQuery(
+      'SELECT 1 FROM admin_sessions WHERE token_id = $1 AND expires_at > NOW()',
+      [tokenId]
+    );
+    return !!(r && r.rows.length);
+  }
+  const sessions = loadSessionsFromFile();
+  const exp = sessions[tokenId];
+  return Number.isFinite(exp) && exp > Date.now();
+}
+
+async function revokeAdminSession(tokenId) {
+  if (dbPool) {
+    await dbQuery('DELETE FROM admin_sessions WHERE token_id = $1', [tokenId]);
+    return;
+  }
+  const sessions = loadSessionsFromFile();
+  if (sessions[tokenId] != null) {
+    delete sessions[tokenId];
+    saveSessionsToFile(sessions);
+  }
+}
+
+function newTokenId() {
+  return crypto.randomBytes(16).toString('hex');
+}
+
+function createAdminToken(username, version, tokenId) {
+  const issued = Date.now();
+  const expires = issued + TOKEN_TTL_MS;
+  const payload = [username, issued, expires, version, tokenId].join('|');
   const sig = crypto.createHmac('sha256', TOKEN_SECRET).update(payload).digest('hex');
-  return Buffer.from(payload + ':' + sig).toString('base64');
+  return { token: Buffer.from(payload + '|' + sig).toString('base64'), tokenId, expires };
 }
-function verifyAdminToken(token) {
+function decodeAdminToken(token) {
   try {
     const decoded = Buffer.from(token, 'base64').toString('utf8');
-    const parts = decoded.split(':');
-    if (parts.length < 3) return false;
+    const parts = decoded.split('|');
+    // Expected fields: username, issued, expires, version, tokenId, sig (>= 6 parts)
+    if (parts.length < 6) return null;
     const sig = parts.pop();
-    const payload = parts.join(':');
+    const payload = parts.join('|');
     const expectedSig = crypto.createHmac('sha256', TOKEN_SECRET).update(payload).digest('hex');
-    return sig === expectedSig;
-  } catch (e) { return false; }
+    const sigBuf = Buffer.from(sig, 'hex');
+    const expBuf = Buffer.from(expectedSig, 'hex');
+    if (sigBuf.length !== expBuf.length) return null;
+    if (!crypto.timingSafeEqual(sigBuf, expBuf)) return null;
+    const tokenId = parts[parts.length - 1];
+    const version = parseInt(parts[parts.length - 2], 10);
+    const expires = parseInt(parts[parts.length - 3], 10);
+    const issued = parseInt(parts[parts.length - 4], 10);
+    const username = parts.slice(0, parts.length - 4).join('|');
+    if (!Number.isFinite(issued) || !Number.isFinite(expires) || !Number.isFinite(version)) return null;
+    if (!tokenId) return null;
+    return { username, issued, expires, version, tokenId };
+  } catch (e) { return null; }
 }
-const adminTokens = new Set();
+async function verifyAdminToken(token) {
+  const data = decodeAdminToken(token);
+  if (!data) return false;
+  if (Date.now() > data.expires) return false;
+  const cur = await getCurrentTokenVersion();
+  if (data.version !== cur) return false;
+  if (!(await isSessionActive(data.tokenId, data.expires))) return false;
+  return data;
+}
+function decodeAdminTokenFromHeader(req) {
+  const auth = req.headers.authorization || '';
+  const token = auth.replace('Bearer ', '');
+  return token ? decodeAdminToken(token) : null;
+}
+
+// Auth guard for admin API routes. Every /admin/api/* route should be guarded
+// with this middleware EXCEPT:
+//   - POST /admin/api/login         (used to obtain a token)
+//   - POST /admin/api/leads         (public lead submission from the site forms)
+// /admin/api/logout MUST be guarded — without it, any anonymous caller could
+// pass a stolen/guessed token id and force-revoke an admin session.
+async function requireAdminAuth(req, res, next) {
+  const auth = req.headers.authorization || '';
+  const token = auth.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ success: false, message: 'Unauthorized' });
+  const data = await verifyAdminToken(token);
+  if (!data) return res.status(401).json({ success: false, message: 'Unauthorized' });
+  req.adminToken = data;
+  next();
+}
 
 const THEME_DIR = path.join(__dirname, 'wp-theme', 'cahit-theme');
 const BASE_URL = 'https://files.manuscdn.com/user_upload_by_module/session_file/310419663029149863/';
@@ -611,7 +841,7 @@ app.post('/api/track', express.json(), async (req, res) => {
   } catch (e) { res.json({ ok: true }); }
 });
 
-app.get('/admin/api/analytics', async (req, res) => {
+app.get('/admin/api/analytics', requireAdminAuth, async (req, res) => {
   try {
     if (!dbPool) return res.json({ success: true, data: {} });
 
@@ -767,12 +997,7 @@ function saveOpenAIKey(key) {
   try { fs.writeFileSync(OPENAI_KEY_FILE, JSON.stringify({ key }, null, 2)); } catch (e) {}
 }
 
-app.post('/admin/api/save-openai-key', express.json(), async (req, res) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
-  if (!token || (!adminTokens.has(token) && !verifyAdminToken(token))) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
+app.post('/admin/api/save-openai-key', requireAdminAuth, express.json(), async (req, res) => {
   const { key, clear } = req.body || {};
   const trimmed = (key == null ? '' : String(key)).trim();
   // Refuse to silently wipe an existing key. Caller must pass `clear: true` to clear it.
@@ -789,12 +1014,7 @@ app.post('/admin/api/save-openai-key', express.json(), async (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/admin/api/openai-key-status', async (req, res) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
-  if (!token || ((!adminTokens.has(token) && !verifyAdminToken(token)) && !verifyAdminToken(token))) {
-    return res.status(401).json({ success: false });
-  }
+app.get('/admin/api/openai-key-status', requireAdminAuth, async (req, res) => {
   const key = await loadOpenAIKeyAsync();
   res.json({ success: true, hasKey: !!key, maskedKey: key ? 'sk-...' + key.slice(-4) : '' });
 });
@@ -873,12 +1093,7 @@ async function buildSystemPrompt() {
   return prompt;
 }
 
-app.get('/admin/api/chatbot-knowledge', async (req, res) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
-  if (!token || (!adminTokens.has(token) && !verifyAdminToken(token))) {
-    return res.status(401).json({ success: false });
-  }
+app.get('/admin/api/chatbot-knowledge', requireAdminAuth, async (req, res) => {
   if (dbPool) {
     const entries = await dbGetKnowledgeEntries();
     const personality = await dbGetSetting('chatbot_personality', '');
@@ -890,12 +1105,7 @@ app.get('/admin/api/chatbot-knowledge', async (req, res) => {
   }
 });
 
-app.post('/admin/api/chatbot-knowledge', express.json(), async (req, res) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
-  if (!token || (!adminTokens.has(token) && !verifyAdminToken(token))) {
-    return res.status(401).json({ success: false });
-  }
+app.post('/admin/api/chatbot-knowledge', requireAdminAuth, express.json(), async (req, res) => {
   const { entries, personality, language, position } = req.body || {};
   if (dbPool) {
     await dbSaveKnowledgeEntries(entries || []);
@@ -907,12 +1117,7 @@ app.post('/admin/api/chatbot-knowledge', express.json(), async (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/admin/api/chatbot-knowledge-export', async (req, res) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
-  if (!token || (!adminTokens.has(token) && !verifyAdminToken(token))) {
-    return res.status(401).json({ success: false });
-  }
+app.get('/admin/api/chatbot-knowledge-export', requireAdminAuth, async (req, res) => {
   let knowledge;
   if (dbPool) {
     const entries = await dbGetKnowledgeEntries();
@@ -974,7 +1179,7 @@ app.post('/api/chat', express.json(), async (req, res) => {
   }
 });
 
-app.post('/admin/api/ai-blog-generate', express.json(), async (req, res) => {
+app.post('/admin/api/ai-blog-generate', requireAdminAuth, express.json(), async (req, res) => {
   const { topic, type, language, sourceText } = req.body || {};
   if (!topic && !sourceText) return res.json({ success: false, error: 'Please provide a topic or source text' });
 
@@ -1030,7 +1235,7 @@ app.post('/admin/api/ai-blog-generate', express.json(), async (req, res) => {
   }
 });
 
-app.post('/admin/api/ai-blog-image', express.json(), async (req, res) => {
+app.post('/admin/api/ai-blog-image', requireAdminAuth, express.json(), async (req, res) => {
   const { prompt } = req.body || {};
   if (!prompt) return res.json({ success: false, error: 'Please provide an image prompt' });
 
@@ -1093,62 +1298,89 @@ app.post('/admin/api/ai-blog-image', express.json(), async (req, res) => {
 // Admin dashboard
 const ADMIN_DIR = path.join(THEME_DIR, 'admin');
 
+// Resolve current admin credentials, preferring the DB hash when available and
+// transparently migrating legacy plaintext values to bcrypt hashes on read.
+async function resolveAdminCredentials() {
+  const fileCreds = loadCredentials();
+  let username = fileCreds.username;
+  let passwordHash = fileCreds.passwordHash;
+  if (dbPool) {
+    username = await dbGetSetting('admin_username', username);
+    let dbHash = await dbGetSetting('admin_password_hash', null);
+    if (!dbHash) {
+      // Legacy: a plaintext password may live under admin_password. Migrate it.
+      const legacyPlain = await dbGetSetting('admin_password', null);
+      if (legacyPlain) {
+        dbHash = isBcryptHash(legacyPlain) ? legacyPlain : hashPassword(legacyPlain);
+        await dbSetSetting('admin_password_hash', dbHash);
+        await dbSetSetting('admin_password', '');
+      }
+    }
+    if (dbHash) passwordHash = dbHash;
+  }
+  return { username, passwordHash };
+}
+
+async function persistAdminCredentials(username, passwordHash) {
+  saveCredentials({ username, passwordHash });
+  if (dbPool) {
+    await dbSetSetting('admin_username', username);
+    await dbSetSetting('admin_password_hash', passwordHash);
+    // Ensure no plaintext leftover lingers in the DB.
+    await dbSetSetting('admin_password', '');
+  }
+}
+
 app.post('/admin/api/login', express.json(), async (req, res) => {
   const { username, password } = req.body || {};
-  let creds = loadCredentials();
-  if (dbPool) {
-    const dbUser = await dbGetSetting('admin_username', creds.username);
-    const dbPass = await dbGetSetting('admin_password', creds.password);
-    creds = { username: dbUser, password: dbPass };
-  }
-  if ((username === creds.username || username === 'admin@cahitcontracting.com') && password === creds.password) {
-    const token = createAdminToken(username);
-    adminTokens.add(token);
-    res.json({ success: true, token, user: { name: 'Admin', role: 'administrator' } });
+  const creds = await resolveAdminCredentials();
+  const userOk = username === creds.username || username === 'admin@cahitcontracting.com';
+  const passOk = userOk && verifyPassword(password || '', creds.passwordHash);
+  if (userOk && passOk) {
+    // Opportunistic upgrade: if the stored value wasn't a bcrypt hash (legacy
+    // plaintext that happened to match), persist a hashed version now.
+    if (!isBcryptHash(creds.passwordHash)) {
+      try { await persistAdminCredentials(creds.username, hashPassword(password)); } catch (e) {}
+    }
+    const version = await getCurrentTokenVersion();
+    const tokenId = newTokenId();
+    const issued = createAdminToken(creds.username, version, tokenId);
+    await recordAdminSession(tokenId, creds.username, issued.expires);
+    pruneExpiredSessions().catch(() => {});
+    res.json({ success: true, token: issued.token, user: { name: 'Admin', role: 'administrator' } });
   } else {
     res.status(401).json({ success: false, message: 'Invalid username or password' });
   }
 });
 
-app.post('/admin/api/change-credentials', express.json(), async (req, res) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
-  if (!token || (!adminTokens.has(token) && !verifyAdminToken(token))) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
+app.post('/admin/api/change-credentials', requireAdminAuth, express.json(), async (req, res) => {
   const { currentPassword, newUsername, newPassword } = req.body || {};
-  let creds = loadCredentials();
-  if (dbPool) {
-    creds.username = await dbGetSetting('admin_username', creds.username);
-    creds.password = await dbGetSetting('admin_password', creds.password);
-  }
-  if (currentPassword !== creds.password) {
+  const creds = await resolveAdminCredentials();
+  if (!verifyPassword(currentPassword || '', creds.passwordHash)) {
     return res.status(400).json({ success: false, message: 'Current password is incorrect' });
   }
   if (!newPassword || newPassword.length < 6) {
     return res.status(400).json({ success: false, message: 'New password must be at least 6 characters' });
   }
-  creds.username = newUsername && newUsername.trim() ? newUsername.trim() : creds.username;
-  creds.password = newPassword;
-  saveCredentials(creds);
+  const nextUsername = newUsername && newUsername.trim() ? newUsername.trim() : creds.username;
+  const nextHash = hashPassword(newPassword);
+  await persistAdminCredentials(nextUsername, nextHash);
+  const newVersion = await bumpTokenVersion();
+  // Bumping the version invalidates all old tokens; also clear the per-token
+  // allow-list so stale rows don't accumulate.
   if (dbPool) {
-    await dbSetSetting('admin_username', creds.username);
-    await dbSetSetting('admin_password', creds.password);
+    await dbQuery('DELETE FROM admin_sessions', []);
+  } else {
+    saveSessionsToFile({});
   }
-  adminTokens.clear();
-  const newToken = createAdminToken(creds.username);
-  adminTokens.add(newToken);
-  res.json({ success: true, token: newToken, message: 'Credentials updated successfully' });
+  const newTokenIdValue = newTokenId();
+  const issued = createAdminToken(nextUsername, newVersion, newTokenIdValue);
+  await recordAdminSession(newTokenIdValue, nextUsername, issued.expires);
+  res.json({ success: true, token: issued.token, message: 'Credentials updated successfully' });
 });
 
-app.get('/admin/api/verify', (req, res) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
-  if (token && (adminTokens.has(token) || verifyAdminToken(token))) {
-    res.json({ success: true });
-  } else {
-    res.status(401).json({ success: false });
-  }
+app.get('/admin/api/verify', requireAdminAuth, (req, res) => {
+  res.json({ success: true });
 });
 
 const UPLOADS_DIR = process.env.VERCEL ? '/tmp/uploads' : path.join(THEME_DIR, 'uploads');
@@ -1191,13 +1423,7 @@ app.get('/blog-media/:id', async (req, res) => {
   }
 });
 
-app.post('/admin/api/upload', (req, res) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
-  if (!token || (!adminTokens.has(token) && !verifyAdminToken(token))) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-
+app.post('/admin/api/upload', requireAdminAuth, (req, res) => {
   const contentType = req.headers['content-type'] || '';
   if (!contentType.includes('multipart/form-data')) {
     return res.status(400).json({ success: false, message: 'Expected multipart/form-data' });
@@ -1308,12 +1534,7 @@ app.post('/admin/api/upload', (req, res) => {
   });
 });
 
-app.get('/admin/api/uploads', async (req, res) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
-  if (!token || (!adminTokens.has(token) && !verifyAdminToken(token))) {
-    return res.status(401).json({ success: false });
-  }
+app.get('/admin/api/uploads', requireAdminAuth, async (req, res) => {
   const files = [];
   try {
     if (fs.existsSync(UPLOADS_DIR)) {
@@ -1357,10 +1578,16 @@ app.get('/admin/api/uploads', async (req, res) => {
   res.json({ success: true, files });
 });
 
-app.post('/admin/api/logout', express.json(), (req, res) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
-  adminTokens.delete(token);
+app.post('/admin/api/logout', requireAdminAuth, express.json(), async (req, res) => {
+  // Per-token revocation: remove only the calling session's id from the
+  // allow-list, leaving any other devices the admin is signed in on intact.
+  // Sessions are persisted (DB or JSON fallback) so the revocation survives
+  // process restarts. Change-credentials remains the heavy hammer that wipes
+  // every session at once.
+  if (req.adminToken && req.adminToken.tokenId) {
+    await revokeAdminSession(req.adminToken.tokenId);
+  }
+  pruneExpiredSessions().catch(() => {});
   res.json({ success: true });
 });
 
@@ -1385,7 +1612,7 @@ app.get('/admin', (req, res) => {
   res.send(content);
 });
 
-app.get('/admin/api/leads', async (req, res) => {
+app.get('/admin/api/leads', requireAdminAuth, async (req, res) => {
   if (dbPool) {
     const leads = await dbGetLeads();
     res.json({ success: true, data: leads });
@@ -1415,16 +1642,6 @@ app.post('/admin/api/leads', express.json(), async (req, res) => {
     res.json({ success: true, data: lead });
   }
 });
-
-// Admin auth guard for blog routes
-function requireAdminAuth(req, res, next) {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
-  if (!token || (!adminTokens.has(token) && !verifyAdminToken(token))) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-  next();
-}
 
 // Plain-text HTML escaper for non-RTE fields (title, excerpt, attribute values)
 function escapeHtmlSafe(str) {
@@ -1593,14 +1810,14 @@ function renderServiceCardsHtml(cards) {
 }
 
 // Dynamic Cards API
-app.get('/admin/api/dynamic-cards/:type', async (req, res) => {
+app.get('/admin/api/dynamic-cards/:type', requireAdminAuth, async (req, res) => {
   try {
     const cards = req.params.type === 'projects' ? await getProjectCards() : await getServiceCards();
     res.json({ success: true, cards });
   } catch(e) { res.json({ success: false, error: e.message }); }
 });
 
-app.put('/admin/api/dynamic-cards/:type', express.json(), async (req, res) => {
+app.put('/admin/api/dynamic-cards/:type', requireAdminAuth, express.json(), async (req, res) => {
   try {
     const key = req.params.type === 'projects' ? 'dynamic_project_cards' : 'dynamic_service_cards';
     await dbSetSetting(key, JSON.stringify(req.body.cards || []));
@@ -1609,14 +1826,14 @@ app.put('/admin/api/dynamic-cards/:type', express.json(), async (req, res) => {
 });
 
 // Site Content Save/Load
-app.get('/admin/api/site-content/:key', async (req, res) => {
+app.get('/admin/api/site-content/:key', requireAdminAuth, async (req, res) => {
   try {
     const val = await dbGetSetting('content_' + req.params.key);
     res.json({ success: true, data: val ? JSON.parse(val) : null });
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
 
-app.put('/admin/api/site-content/:key', express.json(), async (req, res) => {
+app.put('/admin/api/site-content/:key', requireAdminAuth, express.json(), async (req, res) => {
   try {
     await dbSetSetting('content_' + req.params.key, JSON.stringify(req.body.data || {}));
     res.json({ success: true });
@@ -1624,7 +1841,7 @@ app.put('/admin/api/site-content/:key', express.json(), async (req, res) => {
 });
 
 // Lead status update
-app.post('/admin/api/leads/:id/status', express.json(), async (req, res) => {
+app.post('/admin/api/leads/:id/status', requireAdminAuth, express.json(), async (req, res) => {
   try {
     const { status } = req.body;
     if (dbPool) {
@@ -1636,7 +1853,7 @@ app.post('/admin/api/leads/:id/status', express.json(), async (req, res) => {
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
 
-app.get('/admin/api/pages', (req, res) => {
+app.get('/admin/api/pages', requireAdminAuth, (req, res) => {
   const pages = [
     { name: 'Home', path: '/', template: 'front-page.php', status: 'published' },
     { name: 'About Us', path: '/about', template: 'page-about.php', status: 'published' },
@@ -2105,6 +2322,9 @@ async function initDatabase() {
     await dbQuery(`CREATE TABLE IF NOT EXISTS blog_images (id SERIAL PRIMARY KEY, mime_type VARCHAR(100) NOT NULL DEFAULT 'image/png', data BYTEA NOT NULL, created_at TIMESTAMP DEFAULT NOW())`);
     await dbQuery(`CREATE TABLE IF NOT EXISTS blog_media (id SERIAL PRIMARY KEY, mime_type VARCHAR(100) NOT NULL DEFAULT 'application/octet-stream', original_name VARCHAR(500) DEFAULT '', data BYTEA NOT NULL, created_at TIMESTAMP DEFAULT NOW())`);
     await dbQuery(`CREATE TABLE IF NOT EXISTS page_views (id SERIAL PRIMARY KEY, page VARCHAR(500) NOT NULL, referrer VARCHAR(1000) DEFAULT '', user_agent TEXT DEFAULT '', session_id VARCHAR(100) DEFAULT '', ip VARCHAR(100) DEFAULT '', created_at TIMESTAMP DEFAULT NOW())`);
+    await dbQuery(`CREATE TABLE IF NOT EXISTS admin_sessions (token_id VARCHAR(64) PRIMARY KEY, username VARCHAR(255) NOT NULL DEFAULT '', expires_at TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW())`);
+    await dbQuery(`CREATE INDEX IF NOT EXISTS admin_sessions_expires_at_idx ON admin_sessions (expires_at)`);
+    await dbQuery('DELETE FROM admin_sessions WHERE expires_at < NOW()');
     await dbQuery(`CREATE INDEX IF NOT EXISTS idx_page_views_created ON page_views(created_at)`);
     await dbQuery(`CREATE INDEX IF NOT EXISTS idx_page_views_page ON page_views(page)`);
     console.log('Database tables initialized');

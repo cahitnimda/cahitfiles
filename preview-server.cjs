@@ -338,6 +338,12 @@ async function bumpTokenVersion() {
 
 // ---------- Per-token session allow-list ----------
 
+function normalizeSessionEntry(v) {
+  // Backwards compat: legacy entries were a bare expires-ms number.
+  if (Number.isFinite(v)) return { expiresMs: v };
+  if (v && typeof v === 'object') return v;
+  return null;
+}
 function loadSessionsFromFile() {
   try {
     if (fs.existsSync(TOKEN_SESSIONS_FILE)) {
@@ -351,6 +357,17 @@ function saveSessionsToFile(sessions) {
   try { fs.writeFileSync(TOKEN_SESSIONS_FILE, JSON.stringify({ sessions }, null, 2)); } catch (e) {}
 }
 
+function clientIpFromReq(req) {
+  if (!req) return '';
+  const fwd = (req.headers && req.headers['x-forwarded-for']) || '';
+  if (fwd) return String(fwd).split(',')[0].trim();
+  return (req.ip || (req.connection && req.connection.remoteAddress) || '').toString();
+}
+function clientUaFromReq(req) {
+  if (!req || !req.headers) return '';
+  return String(req.headers['user-agent'] || '').slice(0, 500);
+}
+
 async function pruneExpiredSessions() {
   const now = Date.now();
   if (dbPool) {
@@ -360,7 +377,8 @@ async function pruneExpiredSessions() {
   const sessions = loadSessionsFromFile();
   let changed = false;
   for (const id of Object.keys(sessions)) {
-    if (!Number.isFinite(sessions[id]) || sessions[id] < now) {
+    const e = normalizeSessionEntry(sessions[id]);
+    if (!e || !Number.isFinite(e.expiresMs) || e.expiresMs < now) {
       delete sessions[id];
       changed = true;
     }
@@ -368,16 +386,54 @@ async function pruneExpiredSessions() {
   if (changed) saveSessionsToFile(sessions);
 }
 
-async function recordAdminSession(tokenId, username, expiresMs) {
+async function recordAdminSession(tokenId, username, expiresMs, req) {
+  const ip = clientIpFromReq(req);
+  const ua = clientUaFromReq(req);
+  const now = Date.now();
   if (dbPool) {
     await dbQuery(
-      'INSERT INTO admin_sessions (token_id, username, expires_at) VALUES ($1, $2, $3) ON CONFLICT (token_id) DO UPDATE SET username = $2, expires_at = $3',
-      [tokenId, username, new Date(expiresMs)]
+      'INSERT INTO admin_sessions (token_id, username, expires_at, last_seen_at, last_ip, last_user_agent, created_ip, created_user_agent) ' +
+      'VALUES ($1, $2, $3, NOW(), $4, $5, $4, $5) ' +
+      'ON CONFLICT (token_id) DO UPDATE SET username = $2, expires_at = $3, last_seen_at = NOW(), last_ip = $4, last_user_agent = $5',
+      [tokenId, username, new Date(expiresMs), ip, ua]
     );
     return;
   }
   const sessions = loadSessionsFromFile();
-  sessions[tokenId] = expiresMs;
+  const prev = normalizeSessionEntry(sessions[tokenId]) || {};
+  sessions[tokenId] = {
+    expiresMs: expiresMs,
+    username: username,
+    createdAt: prev.createdAt || now,
+    createdIp: prev.createdIp || ip,
+    createdUa: prev.createdUa || ua,
+    lastSeenAt: now,
+    lastIp: ip,
+    lastUa: ua
+  };
+  saveSessionsToFile(sessions);
+}
+
+async function touchAdminSession(tokenId, req) {
+  if (!tokenId) return;
+  const ip = clientIpFromReq(req);
+  const ua = clientUaFromReq(req);
+  if (dbPool) {
+    try {
+      await dbQuery(
+        'UPDATE admin_sessions SET last_seen_at = NOW(), last_ip = $2, last_user_agent = $3 WHERE token_id = $1',
+        [tokenId, ip, ua]
+      );
+    } catch (e) {}
+    return;
+  }
+  const sessions = loadSessionsFromFile();
+  const e = normalizeSessionEntry(sessions[tokenId]);
+  if (!e) return;
+  e.lastSeenAt = Date.now();
+  if (ip) e.lastIp = ip;
+  if (ua) e.lastUa = ua;
+  sessions[tokenId] = e;
   saveSessionsToFile(sessions);
 }
 
@@ -391,8 +447,8 @@ async function isSessionActive(tokenId, expiresMs) {
     return !!(r && r.rows.length);
   }
   const sessions = loadSessionsFromFile();
-  const exp = sessions[tokenId];
-  return Number.isFinite(exp) && exp > Date.now();
+  const e = normalizeSessionEntry(sessions[tokenId]);
+  return !!(e && Number.isFinite(e.expiresMs) && e.expiresMs > Date.now());
 }
 
 async function revokeAdminSession(tokenId) {
@@ -405,6 +461,53 @@ async function revokeAdminSession(tokenId) {
     delete sessions[tokenId];
     saveSessionsToFile(sessions);
   }
+}
+
+async function listAdminSessions() {
+  if (dbPool) {
+    const r = await dbQuery(
+      'SELECT token_id, username, created_at, expires_at, last_seen_at, last_ip, last_user_agent, created_ip, created_user_agent ' +
+      'FROM admin_sessions WHERE expires_at > NOW() ORDER BY last_seen_at DESC NULLS LAST, created_at DESC',
+      []
+    );
+    return (r.rows || []).map(function(row) {
+      return {
+        tokenId: row.token_id,
+        username: row.username || '',
+        createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
+        expiresAt: row.expires_at ? new Date(row.expires_at).toISOString() : null,
+        lastSeenAt: row.last_seen_at ? new Date(row.last_seen_at).toISOString() : null,
+        lastIp: row.last_ip || '',
+        lastUserAgent: row.last_user_agent || '',
+        createdIp: row.created_ip || '',
+        createdUserAgent: row.created_user_agent || ''
+      };
+    });
+  }
+  const now = Date.now();
+  const sessions = loadSessionsFromFile();
+  const out = [];
+  for (const id of Object.keys(sessions)) {
+    const e = normalizeSessionEntry(sessions[id]);
+    if (!e || !Number.isFinite(e.expiresMs) || e.expiresMs < now) continue;
+    out.push({
+      tokenId: id,
+      username: e.username || '',
+      createdAt: e.createdAt ? new Date(e.createdAt).toISOString() : null,
+      expiresAt: new Date(e.expiresMs).toISOString(),
+      lastSeenAt: e.lastSeenAt ? new Date(e.lastSeenAt).toISOString() : null,
+      lastIp: e.lastIp || '',
+      lastUserAgent: e.lastUa || '',
+      createdIp: e.createdIp || '',
+      createdUserAgent: e.createdUa || ''
+    });
+  }
+  out.sort(function(a, b) {
+    const av = a.lastSeenAt || a.createdAt || '';
+    const bv = b.lastSeenAt || b.createdAt || '';
+    return bv.localeCompare(av);
+  });
+  return out;
 }
 
 function newTokenId() {
@@ -469,6 +572,10 @@ async function requireAdminAuth(req, res, next) {
   const data = await verifyAdminToken(token);
   if (!data) return res.status(401).json({ success: false, message: 'Unauthorized' });
   req.adminToken = data;
+  // Best-effort: keep the per-session "last seen" / IP / user-agent fresh so
+  // the Active Sessions panel shows useful info. Don't await — failures here
+  // must not break the request.
+  touchAdminSession(data.tokenId, req).catch(function() {});
   next();
 }
 
@@ -1345,7 +1452,7 @@ app.post('/admin/api/login', express.json(), async (req, res) => {
     const version = await getCurrentTokenVersion();
     const tokenId = newTokenId();
     const issued = createAdminToken(creds.username, version, tokenId);
-    await recordAdminSession(tokenId, creds.username, issued.expires);
+    await recordAdminSession(tokenId, creds.username, issued.expires, req);
     pruneExpiredSessions().catch(() => {});
     res.json({ success: true, token: issued.token, user: { name: 'Admin', role: 'administrator' } });
   } else {
@@ -1375,7 +1482,7 @@ app.post('/admin/api/change-credentials', requireAdminAuth, express.json(), asyn
   }
   const newTokenIdValue = newTokenId();
   const issued = createAdminToken(nextUsername, newVersion, newTokenIdValue);
-  await recordAdminSession(newTokenIdValue, nextUsername, issued.expires);
+  await recordAdminSession(newTokenIdValue, nextUsername, issued.expires, req);
   res.json({ success: true, token: issued.token, message: 'Credentials updated successfully' });
 });
 
@@ -1576,6 +1683,34 @@ app.get('/admin/api/uploads', requireAdminAuth, async (req, res) => {
 
   files.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
   res.json({ success: true, files });
+});
+
+app.get('/admin/api/sessions', requireAdminAuth, async (req, res) => {
+  try {
+    await pruneExpiredSessions();
+    const sessions = await listAdminSessions();
+    const currentTokenId = (req.adminToken && req.adminToken.tokenId) || '';
+    res.json({ success: true, currentTokenId: currentTokenId, sessions: sessions });
+  } catch (e) {
+    console.error('list sessions error:', e.message);
+    res.status(500).json({ success: false, message: 'Failed to list sessions' });
+  }
+});
+
+app.delete('/admin/api/sessions/:tokenId', requireAdminAuth, async (req, res) => {
+  // Lets an admin remotely sign out any other device they're signed in on.
+  // Revoking your own current token is allowed too — the next request will
+  // 401 and force a fresh login on this device.
+  try {
+    const tid = String(req.params.tokenId || '').trim();
+    if (!tid) return res.status(400).json({ success: false, message: 'Missing token id' });
+    await revokeAdminSession(tid);
+    const isSelf = !!(req.adminToken && req.adminToken.tokenId === tid);
+    res.json({ success: true, revokedSelf: isSelf });
+  } catch (e) {
+    console.error('revoke session error:', e.message);
+    res.status(500).json({ success: false, message: 'Failed to revoke session' });
+  }
 });
 
 app.post('/admin/api/logout', requireAdminAuth, express.json(), async (req, res) => {
@@ -2323,6 +2458,13 @@ async function initDatabase() {
     await dbQuery(`CREATE TABLE IF NOT EXISTS blog_media (id SERIAL PRIMARY KEY, mime_type VARCHAR(100) NOT NULL DEFAULT 'application/octet-stream', original_name VARCHAR(500) DEFAULT '', data BYTEA NOT NULL, created_at TIMESTAMP DEFAULT NOW())`);
     await dbQuery(`CREATE TABLE IF NOT EXISTS page_views (id SERIAL PRIMARY KEY, page VARCHAR(500) NOT NULL, referrer VARCHAR(1000) DEFAULT '', user_agent TEXT DEFAULT '', session_id VARCHAR(100) DEFAULT '', ip VARCHAR(100) DEFAULT '', created_at TIMESTAMP DEFAULT NOW())`);
     await dbQuery(`CREATE TABLE IF NOT EXISTS admin_sessions (token_id VARCHAR(64) PRIMARY KEY, username VARCHAR(255) NOT NULL DEFAULT '', expires_at TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW())`);
+    await dbQuery(`ALTER TABLE admin_sessions ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ`);
+    await dbQuery(`ALTER TABLE admin_sessions ADD COLUMN IF NOT EXISTS last_ip VARCHAR(100) DEFAULT ''`);
+    await dbQuery(`ALTER TABLE admin_sessions ADD COLUMN IF NOT EXISTS last_user_agent VARCHAR(500) DEFAULT ''`);
+    await dbQuery(`ALTER TABLE admin_sessions ADD COLUMN IF NOT EXISTS created_ip VARCHAR(100) DEFAULT ''`);
+    await dbQuery(`ALTER TABLE admin_sessions ADD COLUMN IF NOT EXISTS created_user_agent VARCHAR(500) DEFAULT ''`);
+    await dbQuery(`UPDATE admin_sessions SET created_ip = last_ip WHERE (created_ip IS NULL OR created_ip = '') AND last_ip IS NOT NULL AND last_ip <> ''`);
+    await dbQuery(`UPDATE admin_sessions SET created_user_agent = last_user_agent WHERE (created_user_agent IS NULL OR created_user_agent = '') AND last_user_agent IS NOT NULL AND last_user_agent <> ''`);
     await dbQuery(`CREATE INDEX IF NOT EXISTS admin_sessions_expires_at_idx ON admin_sessions (expires_at)`);
     await dbQuery('DELETE FROM admin_sessions WHERE expires_at < NOW()');
     await dbQuery(`CREATE INDEX IF NOT EXISTS idx_page_views_created ON page_views(created_at)`);

@@ -2391,6 +2391,13 @@
         '<div class="settings-row"><div><div class="settings-row-label">Blog Section</div><div class="settings-row-desc">Show blog posts on the homepage</div></div><button class="toggle on" data-setting="blog" data-testid="toggle-blog"></button></div>' +
       '</div>' +
       '<div class="settings-section">' +
+        '<div class="settings-title">Active Sessions</div>' +
+        '<p class="settings-row-desc" style="margin-bottom:12px">Devices and browsers currently signed in to this admin account. Sign out a row to revoke that session immediately.</p>' +
+        '<div id="active-sessions-list" data-testid="list-active-sessions">' +
+          '<div class="settings-row-desc">Loading sessions…</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="settings-section">' +
         '<div class="settings-title">Account Security</div>' +
         '<div class="form-group"><label class="form-label">Username</label><input class="form-input" type="text" id="setting-username" placeholder="admin" data-testid="input-setting-username" /></div>' +
         '<div class="form-group"><label class="form-label">Current Password</label><input class="form-input" type="password" id="setting-current-password" placeholder="Enter current password" data-testid="input-current-password" /></div>' +
@@ -2567,6 +2574,144 @@
         });
       });
     }
+    loadActiveSessions();
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function summarizeUserAgent(ua) {
+    if (!ua) return 'Unknown device';
+    var browser = 'Browser';
+    if (/Edg\//i.test(ua)) browser = 'Edge';
+    else if (/OPR\/|Opera/i.test(ua)) browser = 'Opera';
+    else if (/Chrome\//i.test(ua) && !/Chromium/i.test(ua)) browser = 'Chrome';
+    else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+    else if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) browser = 'Safari';
+    var os = 'Unknown OS';
+    if (/Windows NT/i.test(ua)) os = 'Windows';
+    else if (/Mac OS X/i.test(ua)) os = 'macOS';
+    else if (/Android/i.test(ua)) os = 'Android';
+    else if (/iPhone|iPad|iOS/i.test(ua)) os = 'iOS';
+    else if (/Linux/i.test(ua)) os = 'Linux';
+    return browser + ' on ' + os;
+  }
+
+  function formatRelativeTime(iso) {
+    if (!iso) return '—';
+    var t = Date.parse(iso);
+    if (!t) return '—';
+    var diff = Math.max(0, Date.now() - t);
+    var s = Math.floor(diff / 1000);
+    if (s < 60) return 'just now';
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + ' min ago';
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + ' hr ago';
+    var d = Math.floor(h / 24);
+    if (d < 30) return d + ' day' + (d === 1 ? '' : 's') + ' ago';
+    try { return new Date(t).toLocaleDateString(); } catch (e) { return iso.slice(0, 10); }
+  }
+
+  function loadActiveSessions() {
+    var container = document.getElementById('active-sessions-list');
+    if (!container) return;
+    fetch('/admin/api/sessions', { headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d || !d.success) {
+          container.innerHTML = '<div class="settings-row-desc" style="color:#ef4444">Could not load active sessions.</div>';
+          return;
+        }
+        renderActiveSessions(container, d.sessions || [], d.currentTokenId || '');
+      })
+      .catch(function() {
+        container.innerHTML = '<div class="settings-row-desc" style="color:#ef4444">Could not load active sessions.</div>';
+      });
+  }
+
+  function renderActiveSessions(container, sessions, currentTokenId) {
+    if (!sessions.length) {
+      container.innerHTML = '<div class="settings-row-desc">No active sessions found.</div>';
+      return;
+    }
+    var html = sessions.map(function(s) {
+      var isCurrent = s.tokenId === currentTokenId;
+      var lastDevice = summarizeUserAgent(s.lastUserAgent);
+      var lastIp = s.lastIp ? s.lastIp : 'IP unknown';
+      var createdIp = s.createdIp || '';
+      var createdUa = s.createdUserAgent || '';
+      var createdDevice = summarizeUserAgent(createdUa);
+      var createdIpLabel = createdIp || 'IP unknown';
+      var ipChanged = createdIp && s.lastIp && createdIp !== s.lastIp;
+      var uaChanged = createdUa && s.lastUserAgent && createdUa !== s.lastUserAgent;
+      var anyChange = ipChanged || uaChanged;
+      var signedInRel = s.createdAt ? formatRelativeTime(s.createdAt) : '';
+      var lastSeenRel = formatRelativeTime(s.lastSeenAt || s.createdAt);
+      var expires = s.expiresAt ? ('Expires ' + formatRelativeTime(s.expiresAt).replace(' ago', '').replace('just now', 'soon')) : '';
+      var borderColor = isCurrent ? '#0ea5e9' : (anyChange ? '#f59e0b' : '#e2e8f0');
+      var bg = isCurrent ? '#f0f9ff' : (anyChange ? '#fffbeb' : '#fff');
+      var rowStyle = 'display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid ' +
+        borderColor + ';border-radius:8px;margin-bottom:8px;background:' + bg + ';';
+      var badge = isCurrent
+        ? '<span style="display:inline-block;font-size:11px;font-weight:600;color:#0369a1;background:#e0f2fe;padding:2px 8px;border-radius:999px;margin-left:8px" data-testid="badge-current-session">This device</span>'
+        : '';
+      var changeBadge = anyChange
+        ? '<span style="display:inline-block;font-size:11px;font-weight:600;color:#92400e;background:#fef3c7;padding:2px 8px;border-radius:999px;margin-left:8px" data-testid="badge-session-changed-' + escapeHtml(s.tokenId) + '" title="The current IP or device differs from where this session was first signed in">Device/IP changed</span>'
+        : '';
+      var btn = isCurrent
+        ? '<span class="settings-row-desc" style="font-size:12px;color:#64748b">Use the Sign Out button in the header to end this session</span>'
+        : '<button class="btn btn-sm" data-revoke-token="' + escapeHtml(s.tokenId) + '" data-testid="button-revoke-session-' + escapeHtml(s.tokenId) + '" style="background:#ef4444;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500">Sign out</button>';
+      var signedInRow = '<div class="settings-row-desc" style="margin-top:4px" data-testid="text-session-signed-in-' + escapeHtml(s.tokenId) + '">' +
+          '<strong style="color:#475569">Signed in from</strong> ' + escapeHtml(createdIpLabel) + ' · ' + escapeHtml(createdDevice) +
+          (signedInRel ? ' · ' + escapeHtml(signedInRel) : '') +
+        '</div>';
+      return '<div style="' + rowStyle + '" data-testid="row-session-' + escapeHtml(s.tokenId) + '">' +
+        '<div style="min-width:0;flex:1">' +
+          '<div style="font-weight:600;color:#0f172a">' + escapeHtml(lastDevice) + badge + changeBadge + '</div>' +
+          signedInRow +
+          '<div class="settings-row-desc" style="margin-top:4px" data-testid="text-session-last-active-' + escapeHtml(s.tokenId) + '">' +
+            '<strong style="color:#475569">Last active from</strong> ' + escapeHtml(lastIp) + ' · ' + escapeHtml(lastDevice) + ' · ' + escapeHtml(lastSeenRel) +
+            (expires ? ' · ' + escapeHtml(expires) : '') +
+          '</div>' +
+          '<div class="settings-row-desc" style="margin-top:2px;font-size:11px;color:#94a3b8;word-break:break-all">' + escapeHtml(s.lastUserAgent || '') + '</div>' +
+        '</div>' +
+        '<div>' + btn + '</div>' +
+      '</div>';
+    }).join('');
+    container.innerHTML = html;
+    container.querySelectorAll('[data-revoke-token]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var tid = btn.getAttribute('data-revoke-token');
+        if (!tid) return;
+        if (!confirm('Sign this session out? The device will be signed out on its next request.')) return;
+        btn.disabled = true;
+        btn.textContent = 'Signing out…';
+        fetch('/admin/api/sessions/' + encodeURIComponent(tid), {
+          method: 'DELETE',
+          headers: authHeaders()
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (d && d.success) {
+              showToast('Session signed out', 'success');
+              loadActiveSessions();
+            } else {
+              btn.disabled = false;
+              btn.textContent = 'Sign out';
+              showToast((d && d.message) || 'Failed to sign out session', 'error');
+            }
+          })
+          .catch(function() {
+            btn.disabled = false;
+            btn.textContent = 'Sign out';
+            showToast('Failed to sign out session', 'error');
+          });
+      });
+    });
   }
 
   function showToast(message, type) {

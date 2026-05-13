@@ -321,6 +321,154 @@ test('save-openai-key accepts a well-formed sk- key', async () => {
 });
 
 // ---------------------------------------------------------------------------
+// /admin/api/sessions — list + remote revoke
+//
+// These guard against two regressions on the new active-sessions screen:
+//   1. An unauthenticated caller must never be able to enumerate live
+//      sessions or remotely sign anyone out.
+//   2. The list response must include `currentTokenId` so the UI can
+//      highlight "this device", and revoking another session must take
+//      effect on the very next request from that token (without
+//      collateral-damaging the caller's own session).
+// Run before the logout block, which terminates `adminToken`.
+// ---------------------------------------------------------------------------
+
+async function loginAsAdminEarly() {
+  const r = await fetch(`${baseUrl}/admin/api/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'admin', password: 'cahit2024' }),
+  });
+  const body = await r.json();
+  assert.equal(r.status, 200, 'admin login should succeed');
+  assert.ok(body.token, 'login should return a token');
+  return body.token;
+}
+
+async function fetchSessions(token) {
+  const r = await fetch(`${baseUrl}/admin/api/sessions`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(r.status, 200, 'authenticated GET /admin/api/sessions should succeed');
+  const body = await r.json();
+  assert.equal(body.success, true, 'sessions response should report success');
+  assert.ok(Array.isArray(body.sessions), 'sessions response should expose an array');
+  return body;
+}
+
+function findSessionByTokenId(sessions, tokenId) {
+  return sessions.find((s) => s && s.tokenId === tokenId);
+}
+
+test('GET /admin/api/sessions rejects unauthenticated callers', async () => {
+  const r = await fetch(`${baseUrl}/admin/api/sessions`);
+  assert.equal(r.status, 401, 'anonymous list-sessions must be rejected');
+});
+
+test('DELETE /admin/api/sessions/:tokenId rejects unauthenticated callers', async () => {
+  // Use a plausible-looking but unknown token id — the auth check must run
+  // before any lookup, otherwise an anonymous caller could probe / revoke
+  // sessions by id.
+  const r = await fetch(`${baseUrl}/admin/api/sessions/some-token-id`, { method: 'DELETE' });
+  assert.equal(r.status, 401, 'anonymous revoke-session must be rejected');
+});
+
+test('two parallel logins both appear in /admin/api/sessions with caller-specific currentTokenId', async () => {
+  const laptopToken = await loginAsAdminEarly();
+  const phoneToken = await loginAsAdminEarly();
+  assert.notEqual(laptopToken, phoneToken, 'each login should mint a unique token');
+
+  const fromLaptop = await fetchSessions(laptopToken);
+  const fromPhone = await fetchSessions(phoneToken);
+
+  // Both sessions must show up in either listing.
+  for (const [label, body] of [['laptop', fromLaptop], ['phone', fromPhone]]) {
+    assert.ok(body.currentTokenId, `${label} listing should include a non-empty currentTokenId`);
+    const ids = body.sessions.map((s) => s.tokenId);
+    assert.ok(ids.includes(body.currentTokenId), `${label} listing should include caller's own session`);
+  }
+
+  // currentTokenId must reflect the caller, not just the most recent login.
+  assert.notEqual(
+    fromLaptop.currentTokenId,
+    fromPhone.currentTokenId,
+    'currentTokenId must differ per caller so the UI highlights the right device',
+  );
+
+  const laptopId = fromLaptop.currentTokenId;
+  const phoneId = fromPhone.currentTokenId;
+  assert.ok(findSessionByTokenId(fromLaptop.sessions, phoneId), 'laptop listing should include the phone session');
+  assert.ok(findSessionByTokenId(fromPhone.sessions, laptopId), 'phone listing should include the laptop session');
+
+  // Clean up so later tests start from a known state.
+  for (const t of [laptopToken, phoneToken]) {
+    await fetch(`${baseUrl}/admin/api/logout`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${t}` },
+    });
+  }
+});
+
+test('revoking another session 401s that token while the caller stays signed in', async () => {
+  const callerToken = await loginAsAdminEarly();
+  const victimToken = await loginAsAdminEarly();
+
+  // Discover the victim's tokenId via the caller's session list.
+  const list = await fetchSessions(callerToken);
+  const victimList = await fetchSessions(victimToken);
+  const victimId = victimList.currentTokenId;
+  assert.ok(victimId, 'victim must have a tokenId');
+  assert.ok(findSessionByTokenId(list.sessions, victimId), 'caller list should include the victim session');
+  assert.notEqual(list.currentTokenId, victimId, 'sanity: caller and victim must be distinct sessions');
+
+  const del = await fetch(`${baseUrl}/admin/api/sessions/${encodeURIComponent(victimId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${callerToken}` },
+  });
+  assert.equal(del.status, 200, 'authenticated revoke must succeed');
+  const delBody = await del.json();
+  assert.equal(delBody.success, true);
+  assert.equal(delBody.revokedSelf, false, 'revoking someone else must report revokedSelf:false');
+
+  const victimAfter = await fetch(`${baseUrl}/admin/api/verify`, {
+    headers: { Authorization: `Bearer ${victimToken}` },
+  });
+  assert.equal(victimAfter.status, 401, 'victim token must be invalid on its next request');
+
+  const callerAfter = await fetch(`${baseUrl}/admin/api/verify`, {
+    headers: { Authorization: `Bearer ${callerToken}` },
+  });
+  assert.equal(callerAfter.status, 200, 'caller token must remain valid after revoking someone else');
+
+  // Clean up.
+  await fetch(`${baseUrl}/admin/api/logout`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${callerToken}` },
+  });
+});
+
+test('self-revoke reports revokedSelf:true and 401s the calling token afterwards', async () => {
+  const token = await loginAsAdminEarly();
+  const list = await fetchSessions(token);
+  const ownId = list.currentTokenId;
+  assert.ok(ownId, 'caller must have a tokenId');
+
+  const del = await fetch(`${baseUrl}/admin/api/sessions/${encodeURIComponent(ownId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(del.status, 200, 'self-revoke must succeed');
+  const delBody = await del.json();
+  assert.equal(delBody.success, true);
+  assert.equal(delBody.revokedSelf, true, 'self-revoke must report revokedSelf:true so the UI can force re-login');
+
+  const after = await fetch(`${baseUrl}/admin/api/verify`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(after.status, 401, 'calling token must be invalid after self-revoke');
+});
+
+// ---------------------------------------------------------------------------
 // /admin/api/logout auth + per-session revocation
 //
 // Logout removes only the calling token's id from the per-session allow-list,

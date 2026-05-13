@@ -257,35 +257,73 @@ function saveCredentials(creds) {
   } catch (e) {}
 }
 const TOKEN_SECRET_FILE = path.join(DATA_DIR, 'admin-token-secret.json');
-function loadOrCreateTokenSecret() {
-  const envSecret = process.env.SESSION_SECRET;
-  if (envSecret && envSecret.trim().length >= 16) {
-    return envSecret;
-  }
-  if (envSecret && envSecret.trim().length > 0) {
-    console.error('[admin-auth] SESSION_SECRET is set but too short (need >= 16 chars). Refusing to start.');
-    process.exit(1);
-  }
+// Token-signing secret. Order of preference:
+//   1. process.env.SESSION_SECRET (preferred for prod)
+//   2. site_settings.admin_token_secret in the DB (shared across all serverless
+//      instances on Vercel — critical, since /tmp is per-instance)
+//   3. admin-token-secret.json on disk (local dev only)
+//   4. Newly generated random hex, persisted back to DB AND file
+// Loaded lazily so the DB is reachable before we try to read.
+let _cachedTokenSecret = null;
+let _tokenSecretPromise = null;
+function readTokenSecretFromFile() {
   try {
     if (fs.existsSync(TOKEN_SECRET_FILE)) {
       const j = JSON.parse(fs.readFileSync(TOKEN_SECRET_FILE, 'utf8'));
-      if (j && typeof j.secret === 'string' && j.secret.length >= 32) {
-        return j.secret;
-      }
+      if (j && typeof j.secret === 'string' && j.secret.length >= 32) return j.secret;
     }
   } catch (e) {}
-  const generated = crypto.randomBytes(48).toString('hex');
+  return null;
+}
+function writeTokenSecretToFile(secret) {
   try {
-    fs.writeFileSync(TOKEN_SECRET_FILE, JSON.stringify({ secret: generated }, null, 2), { mode: 0o600 });
+    fs.writeFileSync(TOKEN_SECRET_FILE, JSON.stringify({ secret }, null, 2), { mode: 0o600 });
     try { fs.chmodSync(TOKEN_SECRET_FILE, 0o600); } catch (e) {}
-    console.warn('[admin-auth] SESSION_SECRET not set; generated and persisted a random secret to ' + TOKEN_SECRET_FILE + '. Set SESSION_SECRET in the environment for production deployments.');
-  } catch (e) {
-    console.error('[admin-auth] SESSION_SECRET not set and unable to persist a generated secret (' + e.message + '). Refusing to start; please set SESSION_SECRET in the environment.');
-    process.exit(1);
+  } catch (e) {}
+}
+async function loadOrCreateTokenSecret() {
+  const envSecret = process.env.SESSION_SECRET;
+  if (envSecret && envSecret.trim().length >= 16) return envSecret.trim();
+  if (envSecret && envSecret.trim().length > 0) {
+    console.error('[admin-auth] SESSION_SECRET is set but too short (need >= 16 chars).');
+    // Don't exit — fall through to DB/file/generated so the site stays up.
   }
+  // Try the DB first — this is what makes Vercel cold-starts share a secret.
+  if (dbPool) {
+    try {
+      const dbSecret = await dbGetSetting('admin_token_secret', null);
+      if (dbSecret && dbSecret.length >= 32) return dbSecret;
+    } catch (e) {}
+  }
+  // Fall back to the on-disk secret (local dev / persistent VMs).
+  const fileSecret = readTokenSecretFromFile();
+  if (fileSecret) {
+    // Promote the file secret to the DB so future instances pick it up.
+    if (dbPool) { try { await dbSetSetting('admin_token_secret', fileSecret); } catch (e) {} }
+    return fileSecret;
+  }
+  // Generate a new one. Persist to BOTH DB and file (whichever is available).
+  const generated = crypto.randomBytes(48).toString('hex');
+  if (dbPool) {
+    try { await dbSetSetting('admin_token_secret', generated); } catch (e) {}
+  }
+  writeTokenSecretToFile(generated);
+  console.warn('[admin-auth] SESSION_SECRET not set; generated and persisted a random secret. For production stability, set SESSION_SECRET as an environment variable.');
   return generated;
 }
-const TOKEN_SECRET = loadOrCreateTokenSecret();
+async function getTokenSecret() {
+  if (_cachedTokenSecret) return _cachedTokenSecret;
+  if (!_tokenSecretPromise) {
+    _tokenSecretPromise = loadOrCreateTokenSecret().then(function(s) {
+      _cachedTokenSecret = s;
+      return s;
+    }).catch(function(err) {
+      _tokenSecretPromise = null;
+      throw err;
+    });
+  }
+  return _tokenSecretPromise;
+}
 const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days max lifetime
 const TOKEN_VERSION_FILE = path.join(DATA_DIR, 'admin-token-version.json');
 const TOKEN_SESSIONS_FILE = path.join(DATA_DIR, 'admin-sessions.json');
@@ -514,22 +552,24 @@ function newTokenId() {
   return crypto.randomBytes(16).toString('hex');
 }
 
-function createAdminToken(username, version, tokenId) {
+async function createAdminToken(username, version, tokenId) {
+  const secret = await getTokenSecret();
   const issued = Date.now();
   const expires = issued + TOKEN_TTL_MS;
   const payload = [username, issued, expires, version, tokenId].join('|');
-  const sig = crypto.createHmac('sha256', TOKEN_SECRET).update(payload).digest('hex');
+  const sig = crypto.createHmac('sha256', secret).update(payload).digest('hex');
   return { token: Buffer.from(payload + '|' + sig).toString('base64'), tokenId, expires };
 }
-function decodeAdminToken(token) {
+async function decodeAdminToken(token) {
   try {
+    const secret = await getTokenSecret();
     const decoded = Buffer.from(token, 'base64').toString('utf8');
     const parts = decoded.split('|');
     // Expected fields: username, issued, expires, version, tokenId, sig (>= 6 parts)
     if (parts.length < 6) return null;
     const sig = parts.pop();
     const payload = parts.join('|');
-    const expectedSig = crypto.createHmac('sha256', TOKEN_SECRET).update(payload).digest('hex');
+    const expectedSig = crypto.createHmac('sha256', secret).update(payload).digest('hex');
     const sigBuf = Buffer.from(sig, 'hex');
     const expBuf = Buffer.from(expectedSig, 'hex');
     if (sigBuf.length !== expBuf.length) return null;
@@ -545,7 +585,7 @@ function decodeAdminToken(token) {
   } catch (e) { return null; }
 }
 async function verifyAdminToken(token) {
-  const data = decodeAdminToken(token);
+  const data = await decodeAdminToken(token);
   if (!data) return false;
   if (Date.now() > data.expires) return false;
   const cur = await getCurrentTokenVersion();
@@ -553,10 +593,10 @@ async function verifyAdminToken(token) {
   if (!(await isSessionActive(data.tokenId, data.expires))) return false;
   return data;
 }
-function decodeAdminTokenFromHeader(req) {
+async function decodeAdminTokenFromHeader(req) {
   const auth = req.headers.authorization || '';
   const token = auth.replace('Bearer ', '');
-  return token ? decodeAdminToken(token) : null;
+  return token ? await decodeAdminToken(token) : null;
 }
 
 // Auth guard for admin API routes. Every /admin/api/* route should be guarded
@@ -1451,7 +1491,7 @@ app.post('/admin/api/login', express.json(), async (req, res) => {
     }
     const version = await getCurrentTokenVersion();
     const tokenId = newTokenId();
-    const issued = createAdminToken(creds.username, version, tokenId);
+    const issued = await createAdminToken(creds.username, version, tokenId);
     await recordAdminSession(tokenId, creds.username, issued.expires, req);
     pruneExpiredSessions().catch(() => {});
     res.json({ success: true, token: issued.token, user: { name: 'Admin', role: 'administrator' } });
@@ -1481,7 +1521,7 @@ app.post('/admin/api/change-credentials', requireAdminAuth, express.json(), asyn
     saveSessionsToFile({});
   }
   const newTokenIdValue = newTokenId();
-  const issued = createAdminToken(nextUsername, newVersion, newTokenIdValue);
+  const issued = await createAdminToken(nextUsername, newVersion, newTokenIdValue);
   await recordAdminSession(newTokenIdValue, nextUsername, issued.expires, req);
   res.json({ success: true, token: issued.token, message: 'Credentials updated successfully' });
 });

@@ -294,21 +294,43 @@ async function loadOrCreateTokenSecret() {
       const dbSecret = await dbGetSetting('admin_token_secret', null);
       if (dbSecret && dbSecret.length >= 32) return dbSecret;
     } catch (e) {}
+    // Promote the on-disk secret to the DB if present (local→prod migration).
+    const fileSecret = readTokenSecretFromFile();
+    const candidate = fileSecret || crypto.randomBytes(48).toString('hex');
+    // Atomic insert-if-absent so concurrent cold starts CONVERGE on the same
+    // secret instead of last-writer-wins. After insert, always read back what
+    // is actually in the DB — that is the authoritative shared value.
+    try {
+      await dbQuery(
+        "INSERT INTO site_settings (key, value, updated_at) VALUES ('admin_token_secret', $1, NOW()) ON CONFLICT (key) DO NOTHING",
+        [candidate]
+      );
+      const finalSecret = await dbGetSetting('admin_token_secret', null);
+      if (finalSecret && finalSecret.length >= 32) {
+        // Mirror to file for local dev / debug; non-fatal if the disk is RO.
+        if (!fileSecret || fileSecret !== finalSecret) writeTokenSecretToFile(finalSecret);
+        if (!fileSecret) {
+          console.warn('[admin-auth] SESSION_SECRET not set; generated and stored a random secret in the database. For best practice, set SESSION_SECRET as an environment variable.');
+        }
+        return finalSecret;
+      }
+    } catch (e) {
+      console.error('[admin-auth] Failed to bootstrap token secret in DB:', e.message);
+      // Fall through; we will fail loudly below rather than silently use a
+      // per-instance secret in production (that is the bug we just fixed).
+    }
+    // DB is configured but unreachable / write failed. Refuse to mint
+    // ephemeral secrets in this case — it would re-introduce the cold-start
+    // logout bug. Throwing here makes admin auth fail closed; the next request
+    // will retry secret loading once the DB recovers.
+    throw new Error('admin token secret unavailable: DB configured but secret could not be loaded or persisted');
   }
-  // Fall back to the on-disk secret (local dev / persistent VMs).
+  // No DB at all (pure local dev). File-backed secret is fine.
   const fileSecret = readTokenSecretFromFile();
-  if (fileSecret) {
-    // Promote the file secret to the DB so future instances pick it up.
-    if (dbPool) { try { await dbSetSetting('admin_token_secret', fileSecret); } catch (e) {} }
-    return fileSecret;
-  }
-  // Generate a new one. Persist to BOTH DB and file (whichever is available).
+  if (fileSecret) return fileSecret;
   const generated = crypto.randomBytes(48).toString('hex');
-  if (dbPool) {
-    try { await dbSetSetting('admin_token_secret', generated); } catch (e) {}
-  }
   writeTokenSecretToFile(generated);
-  console.warn('[admin-auth] SESSION_SECRET not set; generated and persisted a random secret. For production stability, set SESSION_SECRET as an environment variable.');
+  console.warn('[admin-auth] SESSION_SECRET not set and no DB available; generated a file-backed secret for local dev. Set SESSION_SECRET in production.');
   return generated;
 }
 async function getTokenSecret() {

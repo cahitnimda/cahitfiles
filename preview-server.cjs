@@ -1348,6 +1348,41 @@ app.post('/api/chat', express.json(), async (req, res) => {
   }
 });
 
+// Translate arbitrary text snippets between English and Arabic. Used by the
+// EN→AR helper buttons in the Service Detail and Project Detail editors.
+app.post('/admin/api/translate', requireAdminAuth, express.json(), async (req, res) => {
+  const text = (req.body && typeof req.body.text === 'string') ? req.body.text : '';
+  const target = (req.body && req.body.target === 'en') ? 'en' : 'ar';
+  if (!text.trim()) return res.json({ success: false, error: 'No text provided' });
+  const apiKey = await loadOpenAIKeyAsync();
+  if (!apiKey) return res.json({ success: false, error: 'No OpenAI API key configured. Add one in Admin → Settings.' });
+  const targetName = target === 'ar' ? 'Arabic (Modern Standard Arabic, formal, suitable for a marine & coastal construction company website)' : 'English (clear, professional)';
+  const systemMsg = 'You are a professional translator for Cahit Trading & Contracting LLC, a marine and coastal construction company in Oman. Translate text accurately while preserving meaning, tone, and any HTML tags exactly as they appear (do not translate tag names or attributes — translate only the text inside tags). Output ONLY the translation, with no commentary, no quotes, no preamble.';
+  const userMsg = 'Translate the following to ' + targetName + '. Preserve all HTML markup, list structure, and line breaks.\n\n---\n' + text;
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemMsg },
+          { role: 'user', content: userMsg }
+        ],
+        max_tokens: 3000,
+        temperature: 0.3
+      })
+    });
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    const translated = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+    res.json({ success: true, translated: translated.trim() });
+  } catch (err) {
+    console.error('Translate error:', err.message || err);
+    res.json({ success: false, error: err.message || 'Translation failed' });
+  }
+});
+
 app.post('/admin/api/ai-blog-generate', requireAdminAuth, express.json(), async (req, res) => {
   const { topic, type, language, sourceText } = req.body || {};
   if (!topic && !sourceText) return res.json({ success: false, error: 'Please provide a topic or source text' });

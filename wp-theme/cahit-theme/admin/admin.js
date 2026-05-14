@@ -947,6 +947,22 @@
       '</div>';
     }
 
+    // Build a quick lookup of which keys have an Arabic counterpart in this
+    // section. Used to render "Translate to Arabic" buttons next to the EN
+    // fields. We treat any field whose `${key}-ar` exists in the same section
+    // as the source side of an EN→AR pair.
+    var arPairKeys = {};
+    fields.forEach(function(ff) { arPairKeys[ff.key] = true; });
+    function makeTranslateBtn(enKey) {
+      var arKey = enKey + '-ar';
+      if (!arPairKeys[arKey]) return '';
+      return '<button type="button" class="ai-translate-pair-btn" data-source-key="' + enKey + '" data-target-key="' + arKey + '" data-testid="button-translate-' + enKey + '" ' +
+        'style="margin-left:8px;background:#f59e0b;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:4px" ' +
+        'title="Translate the text in this field to Arabic and place it in the matching Arabic field below">' +
+        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></svg>' +
+        'Translate → Arabic</button>';
+    }
+
     if (fields.length > 0) {
       fields.forEach(function(f) {
         var rawVal = state.editedContent[f.key];
@@ -975,13 +991,13 @@
               '</div>' +
             '</div></div>';
         } else if (f.type === 'textarea') {
-          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + '</label>' +
+          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + makeTranslateBtn(f.key) + '</label>' +
             '<textarea class="form-textarea live-edit-field" data-key="' + f.key + '" data-selector="' + f.selector + '" data-testid="field-' + f.key + '">' + val + '</textarea></div>';
         } else if (f.type === 'richtext') {
           var rtHtml = (typeof rteInitialHtml === 'function') ? rteInitialHtml(val || '') : (val || '');
           var rtlAttr = f.rtl ? ' dir="rtl"' : '';
           var rtlStyle = f.rtl ? 'text-align:right;font-family:\'Noto Sans Arabic\',Arial,sans-serif;' : '';
-          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + '</label>' +
+          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + makeTranslateBtn(f.key) + '</label>' +
             '<div class="rte-mini-toolbar" data-rte-target="rte-' + f.key + '" style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;background:#f1f5f9;border:1px solid #e2e8f0;border-bottom:none;border-radius:6px 6px 0 0;padding:4px">' +
               '<button type="button" class="rte-mini-btn" data-cmd="bold" title="Bold (select text first)" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer;font-weight:700;min-width:28px">B</button>' +
               '<button type="button" class="rte-mini-btn" data-cmd="italic" title="Italic (select text first)" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer;font-style:italic;min-width:28px">I</button>' +
@@ -996,7 +1012,7 @@
         } else {
           var rtlAttrIn = f.rtl ? ' dir="rtl"' : '';
           var rtlStyleIn = f.rtl ? ' style="text-align:right;font-family:\'Noto Sans Arabic\',Arial,sans-serif"' : '';
-          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + '</label>' +
+          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + makeTranslateBtn(f.key) + '</label>' +
             '<input class="form-input live-edit-field"' + rtlAttrIn + rtlStyleIn + ' data-key="' + f.key + '" data-selector="' + f.selector + '" value="' + val.replace(/"/g, '&quot;') + '" data-testid="field-' + f.key + '" /></div>';
         }
       });
@@ -1108,6 +1124,69 @@
       editor.addEventListener('blur', function() {
         var key = this.getAttribute('data-key');
         state.editedContent[key] = this.innerHTML;
+      });
+    });
+
+    // EN→AR auto-translate buttons (Service Detail / Project Detail editors).
+    // Reads the current value from the EN field's editor (richtext, textarea or
+    // input), POSTs to /admin/api/translate, and writes the translated text
+    // into the matching AR field's editor + state.editedContent.
+    document.querySelectorAll('.ai-translate-pair-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        var sourceKey = btn.getAttribute('data-source-key');
+        var targetKey = btn.getAttribute('data-target-key');
+        if (!sourceKey || !targetKey) return;
+        function readField(key) {
+          var rte = document.querySelector('.live-edit-richtext[data-key="' + key + '"]');
+          if (rte) return { kind: 'richtext', el: rte, value: rte.innerHTML };
+          var ta = document.querySelector('textarea.live-edit-field[data-key="' + key + '"]');
+          if (ta) return { kind: 'textarea', el: ta, value: ta.value };
+          var inp = document.querySelector('input.live-edit-field[data-key="' + key + '"]');
+          if (inp) return { kind: 'text', el: inp, value: inp.value };
+          return null;
+        }
+        var source = readField(sourceKey);
+        var target = readField(targetKey);
+        if (!source) { showToast('English field not found', 'error'); return; }
+        if (!target) { showToast('Arabic field not found — make sure you are on the same section', 'error'); return; }
+        var text = (source.value || '').trim();
+        if (!text) { showToast('Type or paste English text first, then click Translate.', 'info'); return; }
+        if (target.value && target.value.trim() && !confirm('The Arabic field already has content. Replace it with the translation?')) return;
+        var origLabel = btn.innerHTML;
+        btn.disabled = true;
+        btn.style.opacity = '0.7';
+        btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Translating...';
+        var token = sessionStorage.getItem('cahit_admin_token') || localStorage.getItem('cahit_admin_token');
+        fetch('/admin/api/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ text: text, target: 'ar' })
+        }).then(function(r) { return r.json(); }).then(function(data) {
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.innerHTML = origLabel;
+          if (!data || !data.success) {
+            showToast((data && data.error) || 'Translation failed', 'error');
+            return;
+          }
+          var translated = data.translated || '';
+          if (target.kind === 'richtext') {
+            target.el.innerHTML = translated;
+          } else {
+            target.el.value = translated;
+          }
+          state.editedContent[targetKey] = translated;
+          var sel = target.el.getAttribute('data-selector');
+          if (sel) updatePreviewElement(sel, translated, targetKey);
+          showToast('Arabic translation placed below. Review and Save when ready.', 'success');
+          target.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }).catch(function(err) {
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.innerHTML = origLabel;
+          showToast('Translation failed: ' + (err && err.message ? err.message : 'network error'), 'error');
+        });
       });
     });
 

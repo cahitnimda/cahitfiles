@@ -97,6 +97,12 @@ if (defined('ABSPATH')) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input type="text" placeholder="Search..." data-testid="input-search" />
           </div>
+          <div id="livePresencePill" class="live-presence-pill" data-testid="presence-pill" style="display:none;align-items:center;gap:8px;padding:6px 12px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:999px;font-size:12px;color:#065f46;margin-right:12px;cursor:pointer;position:relative" title="Click for details">
+            <span style="display:inline-block;width:8px;height:8px;background:#10b981;border-radius:50%;box-shadow:0 0 0 0 rgba(16,185,129,.7);animation:livePulse 1.6s infinite"></span>
+            <span id="livePresenceText">Online</span>
+            <div id="livePresenceDropdown" style="display:none;position:absolute;top:calc(100% + 6px);right:0;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:10px;min-width:260px;z-index:1000;color:#0f172a;font-size:13px"></div>
+          </div>
+          <style>@keyframes livePulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.7)}70%{box-shadow:0 0 0 8px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}</style>
           <div class="header-user" data-testid="text-user-info">
             <div class="user-avatar">A</div>
             <span>Admin</span>

@@ -62,6 +62,7 @@
     bindMobileMenu();
     bindLogout();
     renderPage('dashboard');
+    startPresence();
   }
 
   function loadLeads() {
@@ -132,6 +133,7 @@
         document.getElementById('pageTitle').textContent = this.querySelector('span').textContent;
         renderPage(page);
         document.getElementById('sidebar').classList.remove('open');
+        if (window.cahitPresenceTick) window.cahitPresenceTick();
       });
     });
   }
@@ -150,12 +152,166 @@
     if (btn) {
       btn.addEventListener('click', function(e) {
         e.preventDefault();
+        // Tell the server to drop my presence row immediately so the other
+        // admin sees me go offline without a 15s lag. Best-effort.
+        try {
+          fetch('/admin/api/presence/leave', { method: 'POST', headers: authHeaders(), keepalive: true });
+        } catch (e) {}
         sessionStorage.removeItem('cahit_admin_token');
         localStorage.removeItem('cahit_admin_token');
         window.location.href = '/admin/login';
       });
     }
   }
+
+  // ---------------------------------------------------------------------
+  // Live admin presence
+  // ---------------------------------------------------------------------
+  // Heartbeats every 3s with our current screen ("Editing: About > Hero",
+  // "Viewing: Leads", etc). The server returns the *other* online admins
+  // and recent save events so we can:
+  //   1) render the green "Online" pill with a dropdown listing each
+  //      admin and what they're looking at, and
+  //   2) auto-reload the section we're editing if the other admin saved
+  //      it (so we always see their latest changes).
+  var presence = {
+    pageLabel: 'Dashboard',
+    sectionLoadedAt: {},      // sectionKey -> timestamp we last loaded it
+    lastSeenSaveTs: {},       // sectionKey -> timestamp of save we already applied
+    timer: null,
+    me: null
+  };
+  function buildPresenceLabel() {
+    var p = state.currentPage;
+    if (p === 'content') {
+      var pageName = state.editingPage || '/';
+      var pageObj = (state.pages || []).filter(function(pg) { return pg.path === pageName; })[0];
+      var pretty = pageObj ? pageObj.name : pageName;
+      var section = state.editingSection || 'hero';
+      var detail = state.detailSlug ? ' › ' + state.detailSlug : '';
+      return 'Editing: ' + pretty + ' › ' + section + detail;
+    }
+    var map = { dashboard:'Dashboard', pages:'Pages', cards:'Cards', media:'Media Library',
+                blog:'Blog Posts', leads:'Leads & Contacts', analytics:'Analytics',
+                chatbot:'Chatbot Knowledge', settings:'Settings' };
+    return 'Viewing: ' + (map[p] || p || 'Admin');
+  }
+  function presenceCurrentSectionKey() {
+    if (state.currentPage !== 'content') return null;
+    var s = state.editingSection;
+    if (!s) return null;
+    if (s === 'project-detail' || s === 'service-detail') {
+      return state.detailSlug ? (s + '-' + state.detailSlug) : null;
+    }
+    return s;
+  }
+  function renderPresencePill(others) {
+    var pill = document.getElementById('livePresencePill');
+    var txt = document.getElementById('livePresenceText');
+    var dd = document.getElementById('livePresenceDropdown');
+    if (!pill || !txt || !dd) return;
+    pill.style.display = 'inline-flex';
+    var n = others ? others.length : 0;
+    if (n === 0) {
+      txt.textContent = 'You\'re the only admin online';
+      pill.style.background = '#f0f9ff';
+      pill.style.borderColor = '#bae6fd';
+      pill.style.color = '#075985';
+    } else {
+      txt.textContent = n + ' other admin' + (n === 1 ? '' : 's') + ' online';
+      pill.style.background = '#ecfdf5';
+      pill.style.borderColor = '#6ee7b7';
+      pill.style.color = '#065f46';
+    }
+    var rows = '';
+    rows += '<div style="font-weight:700;color:#0A3D6B;font-size:12px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Live admin activity</div>';
+    rows += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9">' +
+            '<div style="width:28px;height:28px;border-radius:50%;background:#0A3D6B;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">' + ((presence.me || 'Y').charAt(0).toUpperCase()) + '</div>' +
+            '<div style="flex:1;min-width:0"><div style="font-weight:600">' + (presence.me || 'You') + ' <span style="color:#10b981;font-size:11px;font-weight:400">(you)</span></div>' +
+            '<div style="color:#64748b;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + presence.pageLabel + '</div></div></div>';
+    if (n === 0) {
+      rows += '<div style="padding:10px 4px;color:#94a3b8;font-size:12px;text-align:center">No other admins online right now.</div>';
+    } else {
+      others.forEach(function(o) {
+        var ago = Math.max(0, Math.round((Date.now() - (o.ts || Date.now())) / 1000));
+        rows += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9">' +
+                '<div style="width:28px;height:28px;border-radius:50%;background:#10b981;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">' + (o.user.charAt(0).toUpperCase()) + '</div>' +
+                '<div style="flex:1;min-width:0"><div style="font-weight:600">' + o.user + ' <span style="color:#10b981;font-size:11px">● online</span></div>' +
+                '<div style="color:#64748b;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (o.label || '—') + '</div>' +
+                '<div style="color:#94a3b8;font-size:11px">last seen ' + ago + 's ago</div></div></div>';
+      });
+    }
+    dd.innerHTML = rows;
+    if (!pill._bound) {
+      pill._bound = true;
+      pill.addEventListener('click', function(e) {
+        e.stopPropagation();
+        dd.style.display = (dd.style.display === 'none' ? 'block' : 'none');
+      });
+      document.addEventListener('click', function(e) {
+        if (!pill.contains(e.target)) dd.style.display = 'none';
+      });
+    }
+  }
+  function applyRemoteSaves(saves) {
+    if (!saves) return;
+    var curKey = presenceCurrentSectionKey();
+    if (!curKey || !saves[curKey]) return;
+    var ev = saves[curKey];
+    if (ev.by && ev.by === presence.me) return;
+    var lastApplied = presence.lastSeenSaveTs[curKey] || 0;
+    var loadedAt = presence.sectionLoadedAt[curKey] || 0;
+    if (ev.ts <= lastApplied || ev.ts <= loadedAt) return;
+    presence.lastSeenSaveTs[curKey] = ev.ts;
+    // Pull the latest content for this section and merge it into the editor.
+    fetch('/admin/api/site-content/' + curKey, { headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(result) {
+        if (!result || !result.success || !result.data) return;
+        Object.keys(result.data).forEach(function(k) { state.editedContent[k] = result.data[k]; });
+        renderPage('content');
+        bindEditorActions();
+        if (typeof showToast === 'function') {
+          showToast(ev.by + ' just saved this section — your editor was refreshed.', 'success');
+        }
+        var iframe = document.getElementById('previewFrame');
+        if (iframe) { try { iframe.src = iframe.src; } catch (e) {} }
+      }).catch(function() {});
+  }
+  function presenceHeartbeat() {
+    presence.pageLabel = buildPresenceLabel();
+    var curKey = presenceCurrentSectionKey();
+    if (curKey && !presence.sectionLoadedAt[curKey]) {
+      presence.sectionLoadedAt[curKey] = Date.now();
+    }
+    fetch('/admin/api/presence', {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ page: state.currentPage || '', label: presence.pageLabel })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (!data || !data.success) return;
+      presence.me = data.me || presence.me;
+      renderPresencePill(data.others || []);
+      applyRemoteSaves(data.saves || {});
+    }).catch(function() {});
+  }
+  function startPresence() {
+    if (presence.timer) return;
+    presenceHeartbeat();
+    presence.timer = setInterval(presenceHeartbeat, 3000);
+    window.addEventListener('beforeunload', function() {
+      try {
+        var token = getAdminToken();
+        if (navigator.sendBeacon) {
+          // sendBeacon can't set Authorization headers — fall back to fetch keepalive.
+        }
+        fetch('/admin/api/presence/leave', { method: 'POST', headers: authHeaders(), keepalive: true });
+      } catch (e) {}
+    });
+  }
+  // Expose so renderPage / section-change handlers can force an immediate
+  // heartbeat instead of waiting up to 3s for the next tick.
+  window.cahitPresenceTick = function() { try { presenceHeartbeat(); } catch (e) {} };
 
   function renderPage(page) {
     var content = document.getElementById('mainContent');
@@ -1086,6 +1242,7 @@
         renderPage('content');
         bindEditorActions();
         scrollPreviewToSection(state.editingSection);
+        if (window.cahitPresenceTick) window.cahitPresenceTick();
       });
     });
 

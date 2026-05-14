@@ -2068,6 +2068,79 @@ app.get('/admin/api/site-content/:key', requireAdminAuth, async (req, res) => {
 app.put('/admin/api/site-content/:key', requireAdminAuth, express.json(), async (req, res) => {
   try {
     await dbSetSetting('content_' + req.params.key, JSON.stringify(req.body.data || {}));
+    // Notify other live admins that this section just changed so their editor
+    // can auto-refresh. Best-effort; presence failure must not break save.
+    try { await recordPresenceSave(req.params.key, req.adminToken && req.adminToken.username); } catch (e) {}
+    res.json({ success: true });
+  } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
+// ---------------------------------------------------------------------------
+// Live admin presence ("see what the other admin is doing")
+// ---------------------------------------------------------------------------
+// State is persisted to site_settings as JSON so it survives across Vercel
+// serverless cold starts and is shared between every running instance.
+//   { users: { <username>: { page, label, ts } },
+//     saves: { <sectionKey>: { ts, by } } }
+// Entries older than PRESENCE_TTL_MS are dropped on every read.
+const PRESENCE_KEY = '_live_presence';
+const PRESENCE_TTL_MS = 15000;     // an admin is considered "online" for 15s after their last heartbeat
+const PRESENCE_SAVE_TTL_MS = 60000; // remember save-events for 60s so slow pollers still see them
+
+async function readPresence() {
+  try {
+    const raw = await dbGetSetting(PRESENCE_KEY);
+    if (!raw) return { users: {}, saves: {} };
+    const obj = JSON.parse(raw);
+    return { users: obj.users || {}, saves: obj.saves || {} };
+  } catch (e) { return { users: {}, saves: {} }; }
+}
+function prunePresence(state) {
+  const now = Date.now();
+  Object.keys(state.users).forEach((u) => {
+    if (!state.users[u] || (now - (state.users[u].ts || 0)) > PRESENCE_TTL_MS) delete state.users[u];
+  });
+  Object.keys(state.saves).forEach((k) => {
+    if (!state.saves[k] || (now - (state.saves[k].ts || 0)) > PRESENCE_SAVE_TTL_MS) delete state.saves[k];
+  });
+  return state;
+}
+async function writePresence(state) {
+  await dbSetSetting(PRESENCE_KEY, JSON.stringify(state));
+}
+async function recordPresenceSave(sectionKey, username) {
+  const state = prunePresence(await readPresence());
+  state.saves[sectionKey] = { ts: Date.now(), by: username || 'admin' };
+  await writePresence(state);
+}
+
+// Heartbeat: client calls this every few seconds with its current screen.
+// Body: { page: 'content', label: 'Editing: About > Hero' }
+// Response includes the *other* online admins and recent save events so the
+// client can render the presence pill and auto-refresh when needed.
+app.post('/admin/api/presence', requireAdminAuth, express.json(), async (req, res) => {
+  try {
+    const me = (req.adminToken && req.adminToken.username) || 'admin';
+    const page = String((req.body && req.body.page) || '').slice(0, 60);
+    const label = String((req.body && req.body.label) || '').slice(0, 200);
+    const state = prunePresence(await readPresence());
+    state.users[me] = { page, label, ts: Date.now() };
+    await writePresence(state);
+    const others = Object.keys(state.users)
+      .filter((u) => u !== me)
+      .map((u) => Object.assign({ user: u }, state.users[u]));
+    res.json({ success: true, me: me, others: others, saves: state.saves, serverTs: Date.now() });
+  } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
+// Sign-out: drop my presence entry immediately so the other admin sees me
+// disappear without waiting for the 15s TTL.
+app.post('/admin/api/presence/leave', requireAdminAuth, async (req, res) => {
+  try {
+    const me = (req.adminToken && req.adminToken.username) || 'admin';
+    const state = prunePresence(await readPresence());
+    delete state.users[me];
+    await writePresence(state);
     res.json({ success: true });
   } catch (e) { res.json({ success: false, error: e.message }); }
 });

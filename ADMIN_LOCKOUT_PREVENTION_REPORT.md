@@ -105,6 +105,7 @@ The reset feature is a popular target for attackers, so it was hardened before g
 | Want a developer to see your screen live | They sign in to `/admin`, click **Follow** next to your name in the green pill at the top |
 | Want to watch what the developer is doing | Click **Follow** next to their name in the green pill at the top |
 | Need to sign out a stolen/forgotten device | **Settings → Active Sessions** → revoke that device |
+| Clear ALL other devices in one click | **Settings → Active Sessions** → **Sign out all other devices** (red button) |
 
 ---
 

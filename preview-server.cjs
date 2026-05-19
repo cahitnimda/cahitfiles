@@ -2236,6 +2236,32 @@ app.delete('/admin/api/sessions/:tokenId', requireAdminAuth, async (req, res) =>
   }
 });
 
+app.post('/admin/api/sessions/logout-others', requireAdminAuth, async (req, res) => {
+  // One-click "sign out everywhere else" — revokes every session for the
+  // caller's account EXCEPT the one making the request. Useful when the
+  // admin sees stale "Browser on Unknown OS" rows and wants to clear them
+  // all at once without clicking Sign Out on each row individually.
+  try {
+    const me = req.adminToken && req.adminToken.username;
+    const myTokenId = req.adminToken && req.adminToken.tokenId;
+    if (!me) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    if (!dbPool) {
+      // No DB: nothing persistent to revoke beyond our own JSON fallback
+      return res.json({ success: true, revoked: 0 });
+    }
+    const r = await dbQuery(
+      'DELETE FROM admin_sessions WHERE username = $1 AND token_id <> $2 RETURNING token_id',
+      [me, myTokenId]
+    );
+    const revoked = (r && r.rows && r.rows.length) || 0;
+    pruneExpiredSessions().catch(() => {});
+    res.json({ success: true, revoked: revoked });
+  } catch (e) {
+    console.error('logout-others error:', e.message);
+    res.status(500).json({ success: false, message: 'Failed to sign out other devices' });
+  }
+});
+
 app.post('/admin/api/logout', requireAdminAuth, express.json(), async (req, res) => {
   // Per-token revocation: remove only the calling session's id from the
   // allow-list, leaving any other devices the admin is signed in on intact.

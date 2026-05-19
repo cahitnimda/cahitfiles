@@ -2836,7 +2836,8 @@
       '</div>' +
       '<div class="settings-section">' +
         '<div class="settings-title">Active Sessions</div>' +
-        '<p class="settings-row-desc" style="margin-bottom:12px">Devices and browsers currently signed in to this admin account. Sign out a row to revoke that session immediately.</p>' +
+        '<p class="settings-row-desc" style="margin-bottom:12px">Devices and browsers currently signed in to this admin account. Sign out a row to revoke that session immediately, or use the button below to clear every other device at once.</p>' +
+        '<button class="btn btn-sm" id="logoutOthersBtn" data-testid="button-logout-others" style="background:#dc2626;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;margin-bottom:12px">Sign out all other devices</button>' +
         '<div id="active-sessions-list" data-testid="list-active-sessions">' +
           '<div class="settings-row-desc">Loading sessions…</div>' +
         '</div>' +
@@ -3056,6 +3057,33 @@
       });
     }
     loadActiveSessions();
+    var logoutOthersBtn = document.getElementById('logoutOthersBtn');
+    if (logoutOthersBtn) {
+      logoutOthersBtn.addEventListener('click', function() {
+        if (!confirm('Sign out every other device signed in as you? This device stays signed in.')) return;
+        logoutOthersBtn.disabled = true;
+        var originalText = logoutOthersBtn.textContent;
+        logoutOthersBtn.textContent = 'Signing out…';
+        fetch('/admin/api/sessions/logout-others', { method: 'POST', headers: authHeaders() })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            logoutOthersBtn.disabled = false;
+            logoutOthersBtn.textContent = originalText;
+            if (d && d.success) {
+              var n = d.revoked || 0;
+              showToast(n ? ('Signed out ' + n + ' other ' + (n === 1 ? 'device' : 'devices')) : 'No other devices were signed in', 'success');
+              loadActiveSessions();
+            } else {
+              showToast((d && d.message) || 'Failed to sign out other devices', 'error');
+            }
+          })
+          .catch(function() {
+            logoutOthersBtn.disabled = false;
+            logoutOthersBtn.textContent = originalText;
+            showToast('Failed to sign out other devices', 'error');
+          });
+      });
+    }
   }
 
   function escapeHtml(s) {

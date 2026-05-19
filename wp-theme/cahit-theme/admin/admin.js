@@ -155,7 +155,12 @@
         // Tell the server to drop my presence row immediately so the other
         // admin sees me go offline without a 15s lag. Best-effort.
         try {
-          fetch('/admin/api/presence/leave', { method: 'POST', headers: authHeaders(), keepalive: true });
+          fetch('/admin/api/presence/leave', {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ clientId: presence.clientId }),
+            keepalive: true
+          });
         } catch (e) {}
         sessionStorage.removeItem('cahit_admin_token');
         localStorage.removeItem('cahit_admin_token');
@@ -174,12 +179,153 @@
   //      admin and what they're looking at, and
   //   2) auto-reload the section we're editing if the other admin saved
   //      it (so we always see their latest changes).
+  // Per-tab client id so two browsers / tabs sharing the same admin account
+  // each show up as a separate live participant. Stored in sessionStorage so
+  // a hard-refresh keeps the same tab identity, but a brand-new tab gets a
+  // fresh one.
+  function getClientId() {
+    var id = sessionStorage.getItem('cahit_admin_client_id');
+    if (!id) {
+      id = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      sessionStorage.setItem('cahit_admin_client_id', id);
+    }
+    return id;
+  }
   var presence = {
     pageLabel: 'Dashboard',
     sectionLoadedAt: {},      // sectionKey -> timestamp we last loaded it
     lastSeenSaveTs: {},       // sectionKey -> timestamp of save we already applied
     timer: null,
-    me: null
+    me: null,                 // username
+    mySid: null,              // session key returned by server (tokenId:clientId)
+    clientId: getClientId(),
+    followingSid: null,       // sid of admin we are mirroring; null = not following
+    lastFollowedKey: ''       // last "page|section|detail" we synced to (to avoid loops)
+  };
+  // Build the rich structured payload sent on every heartbeat. The server
+  // stores it as-is and echoes it back to other admins, which lets the
+  // "Follow" feature navigate exactly to the leader's current screen.
+  function buildPresencePayload() {
+    return {
+      page: state.currentPage || '',
+      editingPage: state.editingPage || '',
+      editingSection: state.editingSection || '',
+      detailSlug: state.detailSlug || '',
+      label: presence.pageLabel,
+      clientId: presence.clientId
+    };
+  }
+  // Navigate our admin UI to mirror another admin's current screen.
+  function followNavigateTo(target) {
+    if (!target) return;
+    var key = (target.page || '') + '|' + (target.editingPage || '') + '|' + (target.editingSection || '') + '|' + (target.detailSlug || '');
+    if (key === presence.lastFollowedKey) return; // already in sync
+    presence.lastFollowedKey = key;
+    var page = target.page || 'dashboard';
+    // Activate the matching sidebar nav item visually.
+    document.querySelectorAll('.nav-item').forEach(function(n) {
+      n.classList.toggle('active', n.getAttribute('data-page') === page);
+      if (n.getAttribute('data-page') === page) {
+        var titleEl = document.getElementById('pageTitle');
+        var span = n.querySelector('span');
+        if (titleEl && span) titleEl.textContent = span.textContent;
+      }
+    });
+    state.currentPage = page;
+    if (page === 'content') {
+      if (target.editingPage) state.editingPage = target.editingPage;
+      if (target.editingSection) state.editingSection = target.editingSection;
+      state.detailSlug = target.detailSlug || null;
+      // Pull the leader's saved content for the matching section so we see
+      // what they see, then render.
+      var isDetail = (state.editingSection === 'project-detail' || state.editingSection === 'service-detail');
+      var saveKey = isDetail ? state.editingSection + '-' + (state.detailSlug || '') : state.editingSection;
+      state.editedContent = {};
+      fetch('/admin/api/site-content/' + saveKey, { headers: authHeaders() })
+        .then(function(r) { return r.json(); })
+        .then(function(result) {
+          if (result && result.success && result.data) {
+            Object.keys(result.data).forEach(function(k) { state.editedContent[k] = result.data[k]; });
+          }
+          renderPage('content');
+          bindEditorActions();
+        }).catch(function() {
+          renderPage('content');
+          bindEditorActions();
+        });
+    } else {
+      renderPage(page);
+    }
+  }
+  // Public helpers used by the pill dropdown buttons.
+  window.cahitFollowStart = function(sid) {
+    presence.followingSid = sid;
+    presence.lastFollowedKey = '';
+    if (typeof showToast === 'function') showToast('Following — your screen will mirror theirs.', 'success');
+    presenceHeartbeat();
+  };
+  window.cahitFollowStop = function() {
+    presence.followingSid = null;
+    presence.lastFollowedKey = '';
+    if (typeof showToast === 'function') showToast('Stopped following.', 'info');
+    presenceHeartbeat();
+  };
+
+  // "View each other's screen" header button → instructions modal.
+  // Built lazily on first click so it doesn't bloat initial DOM.
+  window.cahitOpenScreenShareHelp = function() {
+    var existing = document.getElementById('screenShareHelpModal');
+    if (existing) { existing.style.display = 'flex'; return; }
+    var overlay = document.createElement('div');
+    overlay.id = 'screenShareHelpModal';
+    overlay.setAttribute('data-testid', 'modal-screen-share-help');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
+    overlay.innerHTML =
+      '<div role="dialog" aria-labelledby="ssTitle" style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 24px 64px rgba(0,0,0,.3)">' +
+        '<div style="padding:20px 24px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:12px">' +
+          '<div style="display:flex;align-items:center;gap:10px">' +
+            '<div style="width:36px;height:36px;border-radius:10px;background:#eff6ff;color:#1e40af;display:flex;align-items:center;justify-content:center">' +
+              '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>' +
+            '</div>' +
+            '<h3 id="ssTitle" style="margin:0;font-size:18px;color:#0f172a">How to see each other\'s screen</h3>' +
+          '</div>' +
+          '<button type="button" data-ss-close style="background:none;border:0;font-size:24px;line-height:1;color:#64748b;cursor:pointer;padding:4px 8px" aria-label="Close">×</button>' +
+        '</div>' +
+        '<div style="padding:20px 24px;color:#334155;font-size:14px;line-height:1.6">' +
+          '<p style="margin:0 0 14px"><strong>Follow mode</strong> lets one admin mirror another admin\'s screen in real time. When the leader navigates between pages or sections, the follower\'s panel automatically jumps with them.</p>' +
+          '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:16px">' +
+            '<div style="font-weight:700;color:#0A3D6B;font-size:13px;margin-bottom:8px">Step by step</div>' +
+            '<ol style="margin:0;padding-left:20px">' +
+              '<li style="margin-bottom:6px">Both admins log in to <code style="background:#e2e8f0;padding:1px 6px;border-radius:4px">/admin</code> from any device.</li>' +
+              '<li style="margin-bottom:6px">In the top-right header you\'ll see a green <strong>Online</strong> pill — it shows how many other admins are signed in.</li>' +
+              '<li style="margin-bottom:6px">Click that pill to open the live activity dropdown. You\'ll see the other admin\'s name and which page/section they\'re on.</li>' +
+              '<li style="margin-bottom:6px">Click the blue <strong>Follow</strong> button next to their name. Your panel will switch to whatever screen they\'re on within a few seconds.</li>' +
+              '<li style="margin-bottom:6px">As they navigate, your view follows them automatically. The pill turns amber and says <em>“Following [name]”</em>.</li>' +
+              '<li>To stop, click the pill again and hit <strong>Stop following</strong> (or the Stop button on their row).</li>' +
+            '</ol>' +
+          '</div>' +
+          '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#78350f">' +
+            '<strong>Good to know</strong><ul style="margin:6px 0 0;padding-left:18px">' +
+              '<li>Follow is one-way — you see them, they don\'t see you. They keep working normally.</li>' +
+              '<li>Don\'t both follow each other at the same time, or you\'ll be locked watching each other.</li>' +
+              '<li>If you start editing something while following, you stay on that screen but the auto-mirror keeps trying — click <strong>Stop</strong> first if you want to take over.</li>' +
+              '<li>When the other admin saves a section you\'re both editing, the editor auto-refreshes so you don\'t overwrite their work.</li>' +
+            '</ul></div>' +
+          '<p style="margin:0;color:#64748b;font-size:12px">Tip: keep this admin tab open on a second monitor or phone if you want a passive live view of what the other person is doing.</p>' +
+        '</div>' +
+        '<div style="padding:14px 24px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px">' +
+          '<button type="button" data-ss-close class="btn btn-primary" style="background:#0A3D6B;color:#fff;border:0;padding:9px 18px;border-radius:8px;font-weight:600;cursor:pointer">Got it</button>' +
+        '</div>' +
+      '</div>';
+    overlay.addEventListener('click', function(ev) {
+      if (ev.target === overlay || (ev.target.closest && ev.target.closest('[data-ss-close]'))) {
+        overlay.style.display = 'none';
+      }
+    });
+    document.addEventListener('keydown', function escHandler(ev) {
+      if (ev.key === 'Escape' && overlay.style.display !== 'none') overlay.style.display = 'none';
+    });
+    document.body.appendChild(overlay);
   };
   function buildPresenceLabel() {
     var p = state.currentPage;
@@ -212,7 +358,13 @@
     if (!pill || !txt || !dd) return;
     pill.style.display = 'inline-flex';
     var n = others ? others.length : 0;
-    if (n === 0) {
+    if (presence.followingSid) {
+      var lead = (others || []).filter(function(o) { return o.sid === presence.followingSid; })[0];
+      txt.textContent = 'Following ' + (lead ? lead.user : '…');
+      pill.style.background = '#fef3c7';
+      pill.style.borderColor = '#fcd34d';
+      pill.style.color = '#92400e';
+    } else if (n === 0) {
       txt.textContent = 'You\'re the only admin online';
       pill.style.background = '#f0f9ff';
       pill.style.borderColor = '#bae6fd';
@@ -223,25 +375,61 @@
       pill.style.borderColor = '#6ee7b7';
       pill.style.color = '#065f46';
     }
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+        return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+      });
+    }
     var rows = '';
     rows += '<div style="font-weight:700;color:#0A3D6B;font-size:12px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Live admin activity</div>';
     rows += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9">' +
-            '<div style="width:28px;height:28px;border-radius:50%;background:#0A3D6B;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">' + ((presence.me || 'Y').charAt(0).toUpperCase()) + '</div>' +
-            '<div style="flex:1;min-width:0"><div style="font-weight:600">' + (presence.me || 'You') + ' <span style="color:#10b981;font-size:11px;font-weight:400">(you)</span></div>' +
-            '<div style="color:#64748b;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + presence.pageLabel + '</div></div></div>';
+            '<div style="width:28px;height:28px;border-radius:50%;background:#0A3D6B;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">' + esc((presence.me || 'Y').charAt(0).toUpperCase()) + '</div>' +
+            '<div style="flex:1;min-width:0"><div style="font-weight:600">' + esc(presence.me || 'You') + ' <span style="color:#10b981;font-size:11px;font-weight:400">(you)</span></div>' +
+            '<div style="color:#64748b;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(presence.pageLabel) + '</div></div>' +
+            (presence.followingSid ? '<button type="button" data-presence-action="stop-follow" style="background:#92400e;color:#fff;border:0;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-weight:600">Stop following</button>' : '') +
+            '</div>';
     if (n === 0) {
       rows += '<div style="padding:10px 4px;color:#94a3b8;font-size:12px;text-align:center">No other admins online right now.</div>';
     } else {
       others.forEach(function(o) {
         var ago = Math.max(0, Math.round((Date.now() - (o.ts || Date.now())) / 1000));
-        rows += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9">' +
-                '<div style="width:28px;height:28px;border-radius:50%;background:#10b981;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">' + (o.user.charAt(0).toUpperCase()) + '</div>' +
-                '<div style="flex:1;min-width:0"><div style="font-weight:600">' + o.user + ' <span style="color:#10b981;font-size:11px">● online</span></div>' +
-                '<div style="color:#64748b;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (o.label || '—') + '</div>' +
-                '<div style="color:#94a3b8;font-size:11px">last seen ' + ago + 's ago</div></div></div>';
+        var isFollowing = presence.followingSid === o.sid;
+        var btn;
+        if (isFollowing) {
+          btn = '<button type="button" data-presence-action="stop-follow" style="background:#92400e;color:#fff;border:0;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-weight:600">Stop</button>';
+        } else if (presence.followingSid) {
+          btn = '<button type="button" data-presence-action="follow" data-sid="' + esc(o.sid) + '" style="background:#e2e8f0;color:#475569;border:0;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer">Switch</button>';
+        } else {
+          btn = '<button type="button" data-presence-action="follow" data-sid="' + esc(o.sid) + '" style="background:#0A3D6B;color:#fff;border:0;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-weight:600">Follow</button>';
+        }
+        rows += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f1f5f9">' +
+                '<div style="width:28px;height:28px;border-radius:50%;background:#10b981;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">' + esc(o.user.charAt(0).toUpperCase()) + '</div>' +
+                '<div style="flex:1;min-width:0"><div style="font-weight:600">' + esc(o.user) + ' <span style="color:#10b981;font-size:11px">● online</span></div>' +
+                '<div style="color:#64748b;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(o.label || '—') + '</div>' +
+                '<div style="color:#94a3b8;font-size:11px">last seen ' + ago + 's ago</div></div>' +
+                btn +
+                '</div>';
       });
+      rows += '<div style="padding:8px 4px 2px;color:#64748b;font-size:11px;line-height:1.4">Click <strong>Follow</strong> to mirror that admin\'s screen — your panel will auto-navigate to whatever page or section they are on.</div>';
     }
     dd.innerHTML = rows;
+    // Wire up the Follow / Stop / Switch buttons. We delegate on the dropdown
+    // so dynamic re-renders keep working without stacking listeners.
+    if (!dd._followBound) {
+      dd._followBound = true;
+      dd.addEventListener('click', function(ev) {
+        var btnEl = ev.target.closest('[data-presence-action]');
+        if (!btnEl) return;
+        ev.stopPropagation();
+        var action = btnEl.getAttribute('data-presence-action');
+        if (action === 'follow') {
+          var sid = btnEl.getAttribute('data-sid');
+          if (sid && window.cahitFollowStart) window.cahitFollowStart(sid);
+        } else if (action === 'stop-follow') {
+          if (window.cahitFollowStop) window.cahitFollowStop();
+        }
+      });
+    }
     if (!pill._bound) {
       pill._bound = true;
       pill.addEventListener('click', function(e) {
@@ -258,7 +446,7 @@
     var curKey = presenceCurrentSectionKey();
     if (!curKey || !saves[curKey]) return;
     var ev = saves[curKey];
-    if (ev.by && ev.by === presence.me) return;
+    if (ev.sid && ev.sid === presence.mySid) return;
     var lastApplied = presence.lastSeenSaveTs[curKey] || 0;
     var loadedAt = presence.sectionLoadedAt[curKey] || 0;
     if (ev.ts <= lastApplied || ev.ts <= loadedAt) return;
@@ -287,12 +475,27 @@
     fetch('/admin/api/presence', {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ page: state.currentPage || '', label: presence.pageLabel })
+      body: JSON.stringify(buildPresencePayload())
     }).then(function(r) { return r.json(); }).then(function(data) {
       if (!data || !data.success) return;
       presence.me = data.me || presence.me;
-      renderPresencePill(data.others || []);
+      presence.mySid = data.mySid || presence.mySid;
+      var others = data.others || [];
+      renderPresencePill(others);
       applyRemoteSaves(data.saves || {});
+      // If we are following another admin and they are still online, mirror
+      // their current screen. If they've gone offline, stop following.
+      if (presence.followingSid) {
+        var leader = others.filter(function(o) { return o.sid === presence.followingSid; })[0];
+        if (leader) {
+          followNavigateTo(leader);
+        } else {
+          presence.followingSid = null;
+          presence.lastFollowedKey = '';
+          if (typeof showToast === 'function') showToast('The admin you were following went offline.', 'info');
+          renderPresencePill(others);
+        }
+      }
     }).catch(function() {});
   }
   function startPresence() {
@@ -305,7 +508,12 @@
         if (navigator.sendBeacon) {
           // sendBeacon can't set Authorization headers — fall back to fetch keepalive.
         }
-        fetch('/admin/api/presence/leave', { method: 'POST', headers: authHeaders(), keepalive: true });
+        fetch('/admin/api/presence/leave', {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ clientId: presence.clientId }),
+          keepalive: true
+        });
       } catch (e) {}
     });
   }
@@ -2634,6 +2842,17 @@
         '</div>' +
       '</div>' +
       '<div class="settings-section">' +
+        '<div class="settings-title">Password Recovery Emails</div>' +
+        '<p class="settings-row-desc" style="margin-bottom:12px">If you ever forget your password, click <strong>Forgot password?</strong> on the login screen. A one-time reset link (valid 1 hour) will be emailed to every address listed below. Keep at least one address you always have access to.</p>' +
+        '<div class="form-group"><label class="form-label">Recovery emails (comma-separated)</label><input class="form-input" id="setting-recovery-emails" placeholder="ctc@cahitcontracting.com, twolf.om@gmail.com" data-testid="input-recovery-emails" /></div>' +
+        '<button class="btn btn-primary" id="saveRecoveryEmailsBtn" data-testid="button-save-recovery-emails">Save recovery emails</button>' +
+      '</div>' +
+      '<div class="settings-section">' +
+        '<div class="settings-title">Admin Users & Recovery</div>' +
+        '<p class="settings-row-desc" style="margin-bottom:12px">If another admin forgets their password, you can reset it here (you\'ll need to re-enter your own password to confirm). The other admin will be signed out of all devices.</p>' +
+        '<div id="admin-users-list" data-testid="list-admin-users"><div class="settings-row-desc">Loading admins…</div></div>' +
+      '</div>' +
+      '<div class="settings-section">' +
         '<div class="settings-title">Account Security</div>' +
         '<div class="form-group"><label class="form-label">Username</label><input class="form-input" type="text" id="setting-username" placeholder="admin" data-testid="input-setting-username" /></div>' +
         '<div class="form-group"><label class="form-label">Current Password</label><input class="form-input" type="password" id="setting-current-password" placeholder="Enter current password" data-testid="input-current-password" /></div>' +
@@ -2675,6 +2894,32 @@
         this.classList.toggle('on');
       });
     });
+    loadAdminUsersList();
+    loadRecoveryEmails();
+    var recoveryBtn = document.getElementById('saveRecoveryEmailsBtn');
+    if (recoveryBtn) {
+      recoveryBtn.addEventListener('click', function() {
+        var v = (document.getElementById('setting-recovery-emails').value || '').trim();
+        if (!v) { showToast('Please enter at least one recovery email', 'error'); return; }
+        recoveryBtn.disabled = true; recoveryBtn.textContent = 'Saving…';
+        fetch('/admin/api/recovery-emails', {
+          method: 'POST',
+          headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+          body: JSON.stringify({ emails: v })
+        })
+          .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
+          .then(function(res) {
+            recoveryBtn.disabled = false; recoveryBtn.textContent = 'Save recovery emails';
+            if (res.ok && res.d.success) {
+              showToast('Recovery emails saved', 'success');
+              document.getElementById('setting-recovery-emails').value = (res.d.emails || []).join(', ');
+            } else {
+              showToast((res.d && res.d.message) || 'Save failed', 'error');
+            }
+          })
+          .catch(function() { recoveryBtn.disabled = false; recoveryBtn.textContent = 'Save recovery emails'; showToast('Network error', 'error'); });
+      });
+    }
     var changeCredsBtn = document.getElementById('changeCredentialsBtn');
     if (changeCredsBtn) {
       changeCredsBtn.addEventListener('click', function() {
@@ -2850,6 +3095,72 @@
     var d = Math.floor(h / 24);
     if (d < 30) return d + ' day' + (d === 1 ? '' : 's') + ' ago';
     try { return new Date(t).toLocaleDateString(); } catch (e) { return iso.slice(0, 10); }
+  }
+
+  function loadRecoveryEmails() {
+    var input = document.getElementById('setting-recovery-emails');
+    if (!input) return;
+    fetch('/admin/api/recovery-emails', { headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d && d.success && Array.isArray(d.emails)) input.value = d.emails.join(', ');
+      })
+      .catch(function() {});
+  }
+
+  function loadAdminUsersList() {
+    var box = document.getElementById('admin-users-list');
+    if (!box) return;
+    fetch('/admin/api/admin-users', { headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d || !d.success) { box.innerHTML = '<div class="settings-row-desc" style="color:#ef4444">Could not load admin users.</div>'; return; }
+        if (!d.users || !d.users.length) { box.innerHTML = '<div class="settings-row-desc">No admin users found.</div>'; return; }
+        box.innerHTML = d.users.map(function(u) {
+          var nameEsc = String(u.username).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
+          var badges = '';
+          if (u.primary) badges += '<span style="background:#dbeafe;color:#1e40af;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;margin-left:6px">Primary</span>';
+          if (u.isMe) badges += '<span style="background:#dcfce7;color:#15803d;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;margin-left:6px">You</span>';
+          var btn = u.isMe
+            ? '<span class="settings-row-desc" style="font-size:12px">Use Account Security below to change your own password</span>'
+            : '<button type="button" class="btn btn-secondary" data-reset-admin="' + nameEsc + '" data-testid="button-reset-admin-' + nameEsc + '">Reset password</button>';
+          return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #f1f5f9">' +
+                   '<div><div style="font-weight:600;color:#0f172a">' + nameEsc + badges + '</div></div>' +
+                   '<div>' + btn + '</div>' +
+                 '</div>';
+        }).join('');
+        box.querySelectorAll('[data-reset-admin]').forEach(function(b) {
+          b.addEventListener('click', function() { openResetAdminDialog(b.getAttribute('data-reset-admin')); });
+        });
+      })
+      .catch(function() { box.innerHTML = '<div class="settings-row-desc" style="color:#ef4444">Could not load admin users.</div>'; });
+  }
+
+  function openResetAdminDialog(targetUsername) {
+    var newPw = window.prompt('Set a NEW password for "' + targetUsername + '" (at least 6 characters):', '');
+    if (newPw === null) return;
+    newPw = String(newPw);
+    if (newPw.length < 6) { showToast('Password must be at least 6 characters', 'error'); return; }
+    var confirmPw = window.prompt('Confirm the new password for "' + targetUsername + '":', '');
+    if (confirmPw === null) return;
+    if (confirmPw !== newPw) { showToast('Passwords do not match', 'error'); return; }
+    var myPw = window.prompt('Confirm YOUR own current password to authorize this reset:', '');
+    if (myPw === null) return;
+    if (!myPw) { showToast('Your current password is required', 'error'); return; }
+    fetch('/admin/api/admin-users/reset-password', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+      body: JSON.stringify({ targetUsername: targetUsername, currentPassword: myPw, newPassword: newPw })
+    })
+      .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, body: d }; }); })
+      .then(function(res) {
+        if (res.ok && res.body && res.body.success) {
+          showToast('Password reset for ' + targetUsername + '. They have been signed out everywhere.', 'success');
+        } else {
+          showToast((res.body && res.body.message) || 'Failed to reset password', 'error');
+        }
+      })
+      .catch(function() { showToast('Network error while resetting password', 'error'); });
   }
 
   function loadActiveSessions() {
@@ -3503,9 +3814,17 @@
       );
   }
 
+  function bindScreenShareHelp() {
+    var btn = document.getElementById('screenShareHelpBtn');
+    if (btn && !btn._bound) {
+      btn._bound = true;
+      btn.addEventListener('click', function() { window.cahitOpenScreenShareHelp(); });
+    }
+  }
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', function() { bindScreenShareHelp(); init(); });
   } else {
+    bindScreenShareHelp();
     init();
   }
 })();

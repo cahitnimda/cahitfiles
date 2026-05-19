@@ -102,7 +102,11 @@ if (defined('ABSPATH')) {
             <span id="livePresenceText">Online</span>
             <div id="livePresenceDropdown" style="display:none;position:absolute;top:calc(100% + 6px);right:0;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:10px;min-width:260px;z-index:1000;color:#0f172a;font-size:13px"></div>
           </div>
-          <style>@keyframes livePulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.7)}70%{box-shadow:0 0 0 8px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}</style>
+          <button type="button" id="screenShareHelpBtn" data-testid="button-screen-share-help" title="How to see each other's screen" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:999px;font-size:12px;color:#1e40af;margin-right:12px;cursor:pointer;font-weight:600">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            View each other's screen
+          </button>
+          <style>@keyframes livePulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.7)}70%{box-shadow:0 0 0 8px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}#screenShareHelpBtn:hover{background:#dbeafe}</style>
           <div class="header-user" data-testid="text-user-info">
             <div class="user-avatar">A</div>
             <span>Admin</span>

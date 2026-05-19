@@ -80,9 +80,17 @@ if (defined('ABSPATH')) {
             <input type="checkbox" id="remember" data-testid="input-remember" />
             Remember me
           </label>
+          <a href="#" class="forgot-link" id="forgotLink" data-testid="link-forgot-password">Forgot password?</a>
         </div>
         <button type="submit" class="btn-login" id="loginBtn" data-testid="button-login">Sign In</button>
       </form>
+      <div id="forgotPanel" style="display:none;margin-top:18px;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px">
+        <p style="font-size:13px;color:#334155;margin-bottom:10px;line-height:1.5">Enter your username or email. We'll send a one-time reset link to the recovery email(s) on file.</p>
+        <input class="form-input" type="text" id="forgotUser" placeholder="admin or your email" data-testid="input-forgot-username" style="margin-bottom:10px" />
+        <button type="button" class="btn-login" id="forgotBtn" data-testid="button-send-reset" style="padding:10px;font-size:14px">Send reset link</button>
+        <div id="forgotResult" style="font-size:13px;margin-top:10px;display:none"></div>
+        <a href="#" id="forgotCancel" style="display:inline-block;margin-top:10px;font-size:13px;color:#64748b;text-decoration:none">&larr; Back to sign in</a>
+      </div>
     </div>
     <div class="login-footer">
       <a href="<?php echo defined('ABSPATH') ? esc_url(home_url('/')) : '/'; ?>">&larr; Back to website</a>
@@ -106,6 +114,47 @@ if (defined('ABSPATH')) {
       this.innerHTML = type === 'password'
         ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
         : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+    });
+
+    var forgotLink = document.getElementById('forgotLink');
+    var forgotCancel = document.getElementById('forgotCancel');
+    var forgotPanel = document.getElementById('forgotPanel');
+    var forgotBtn = document.getElementById('forgotBtn');
+    var forgotResult = document.getElementById('forgotResult');
+    if (forgotLink) forgotLink.addEventListener('click', function(e) {
+      e.preventDefault();
+      forgotPanel.style.display = 'block';
+      var u = document.getElementById('username').value.trim();
+      if (u) document.getElementById('forgotUser').value = u;
+      document.getElementById('forgotUser').focus();
+    });
+    if (forgotCancel) forgotCancel.addEventListener('click', function(e) {
+      e.preventDefault();
+      forgotPanel.style.display = 'none';
+      forgotResult.style.display = 'none';
+    });
+    if (forgotBtn) forgotBtn.addEventListener('click', function() {
+      var u = document.getElementById('forgotUser').value.trim();
+      if (!u) { forgotResult.style.display = 'block'; forgotResult.style.color = '#dc2626'; forgotResult.textContent = 'Please enter your username or email.'; return; }
+      forgotBtn.disabled = true; forgotBtn.textContent = 'Sending…';
+      fetch('/admin/api/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u }) })
+        .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
+        .then(function(res) {
+          forgotBtn.disabled = false; forgotBtn.textContent = 'Send reset link';
+          forgotResult.style.display = 'block';
+          if (res.ok && res.d && res.d.success) {
+            forgotResult.style.color = '#065f46';
+            forgotResult.textContent = 'Done. Check the recovery email(s) on file — the link is good for 1 hour.';
+          } else {
+            forgotResult.style.color = '#dc2626';
+            forgotResult.textContent = (res.d && res.d.message) || 'Could not send reset email.';
+          }
+        })
+        .catch(function() {
+          forgotBtn.disabled = false; forgotBtn.textContent = 'Send reset link';
+          forgotResult.style.display = 'block'; forgotResult.style.color = '#dc2626';
+          forgotResult.textContent = 'Network error. Try again.';
+        });
     });
 
     form.addEventListener('submit', function(e) {

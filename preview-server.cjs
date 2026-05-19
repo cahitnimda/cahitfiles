@@ -523,6 +523,28 @@ async function revokeAdminSession(tokenId) {
   }
 }
 
+// Sign-out every active session for a given username (used when an admin
+// resets another admin's password — the target must be kicked off all devices
+// so the old password can't be used to ride an existing token).
+async function revokeAdminSessionsForUser(username) {
+  if (!username) return;
+  const u = String(username).toLowerCase();
+  if (dbPool) {
+    try { await dbQuery('DELETE FROM admin_sessions WHERE LOWER(username) = $1', [u]); } catch (e) {}
+    return;
+  }
+  const sessions = loadSessionsFromFile();
+  let changed = false;
+  for (const id of Object.keys(sessions)) {
+    const e = normalizeSessionEntry(sessions[id]);
+    if (e && String(e.username || '').toLowerCase() === u) {
+      delete sessions[id];
+      changed = true;
+    }
+  }
+  if (changed) saveSessionsToFile(sessions);
+}
+
 async function listAdminSessions() {
   if (dbPool) {
     const r = await dbQuery(
@@ -1535,23 +1557,79 @@ async function persistAdminCredentials(username, passwordHash) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Multi-admin support
+// ---------------------------------------------------------------------------
+// The original system stored a single "primary" admin in
+// site_settings.admin_username + admin_password_hash. Additional admins are
+// stored as a JSON array under site_settings.admin_extra_users:
+//   [ { username: 'cosstech@gmail.com', passwordHash: '<bcrypt>' }, ... ]
+// findAdminByUsername() is the single lookup point used by the login route.
+async function readExtraAdmins() {
+  if (!dbPool) return [];
+  try {
+    const raw = await dbGetSetting('admin_extra_users', null);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
+async function writeExtraAdmins(list) {
+  await dbSetSetting('admin_extra_users', JSON.stringify(list || []));
+}
+async function findAdminByUsername(supplied) {
+  const u = String(supplied || '').trim();
+  if (!u) return null;
+  const primary = await resolveAdminCredentials();
+  if (u === primary.username || u === 'admin@cahitcontracting.com') {
+    return { username: primary.username, passwordHash: primary.passwordHash, primary: true };
+  }
+  const extras = await readExtraAdmins();
+  const match = extras.find((e) => e && e.username && e.username.toLowerCase() === u.toLowerCase());
+  if (match) return { username: match.username, passwordHash: match.passwordHash, primary: false };
+  return null;
+}
+async function upsertExtraAdmin(username, plainPassword) {
+  const extras = await readExtraAdmins();
+  const idx = extras.findIndex((e) => e && e.username && e.username.toLowerCase() === username.toLowerCase());
+  const entry = { username: username, passwordHash: hashPassword(plainPassword) };
+  if (idx >= 0) extras[idx] = entry; else extras.push(entry);
+  await writeExtraAdmins(extras);
+}
+
+// Bootstrap the secondary admin requested by the site owner. Runs once on
+// startup; if the account already exists we DO NOT overwrite their password.
+async function bootstrapSecondaryAdmin() {
+  if (!dbPool) return;
+  try {
+    const username = 'cosstech@gmail.com';
+    const extras = await readExtraAdmins();
+    if (extras.find((e) => e && e.username && e.username.toLowerCase() === username.toLowerCase())) return;
+    await upsertExtraAdmin(username, 'TOMOKOnote76$');
+    console.log('[admin] bootstrapped secondary admin: ' + username);
+  } catch (e) {
+    console.error('[admin] bootstrapSecondaryAdmin failed:', e.message);
+  }
+}
+bootstrapSecondaryAdmin().catch(() => {});
+
 app.post('/admin/api/login', express.json(), async (req, res) => {
   const { username, password } = req.body || {};
-  const creds = await resolveAdminCredentials();
-  const userOk = username === creds.username || username === 'admin@cahitcontracting.com';
-  const passOk = userOk && verifyPassword(password || '', creds.passwordHash);
-  if (userOk && passOk) {
+  const account = await findAdminByUsername(username);
+  const passOk = !!account && verifyPassword(password || '', account.passwordHash);
+  if (account && passOk) {
     // Opportunistic upgrade: if the stored value wasn't a bcrypt hash (legacy
-    // plaintext that happened to match), persist a hashed version now.
-    if (!isBcryptHash(creds.passwordHash)) {
-      try { await persistAdminCredentials(creds.username, hashPassword(password)); } catch (e) {}
+    // plaintext that happened to match), persist a hashed version now. Only
+    // applies to the primary admin — extras are always written as bcrypt.
+    if (account.primary && !isBcryptHash(account.passwordHash)) {
+      try { await persistAdminCredentials(account.username, hashPassword(password)); } catch (e) {}
     }
     const version = await getCurrentTokenVersion();
     const tokenId = newTokenId();
-    const issued = await createAdminToken(creds.username, version, tokenId);
-    await recordAdminSession(tokenId, creds.username, issued.expires, req);
+    const issued = await createAdminToken(account.username, version, tokenId);
+    await recordAdminSession(tokenId, account.username, issued.expires, req);
     pruneExpiredSessions().catch(() => {});
-    res.json({ success: true, token: issued.token, user: { name: 'Admin', role: 'administrator' } });
+    res.json({ success: true, token: issued.token, user: { name: account.username, role: 'administrator' } });
   } else {
     res.status(401).json({ success: false, message: 'Invalid username or password' });
   }
@@ -1585,6 +1663,354 @@ app.post('/admin/api/change-credentials', requireAdminAuth, express.json(), asyn
 
 app.get('/admin/api/verify', requireAdminAuth, (req, res) => {
   res.json({ success: true });
+});
+
+// ---------------------------------------------------------------------------
+// Multi-admin recovery: list admin users and let any signed-in admin reset
+// another admin's password (after re-confirming their own current password).
+// This is the lock-out recovery feature — if one admin forgets their password
+// the other admin can reset it for them.
+// ---------------------------------------------------------------------------
+app.get('/admin/api/recovery-emails', requireAdminAuth, async (req, res) => {
+  try {
+    const emails = await getRecoveryEmails();
+    res.json({ success: true, emails: emails, defaults: DEFAULT_RECOVERY_EMAILS });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+app.post('/admin/api/recovery-emails', requireAdminAuth, express.json(), async (req, res) => {
+  try {
+    const raw = String((req.body && req.body.emails) || '');
+    const parts = raw.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean);
+    const bad = parts.filter((e) => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
+    if (bad.length) return res.status(400).json({ success: false, message: 'Invalid email(s): ' + bad.join(', ') });
+    if (!parts.length) return res.status(400).json({ success: false, message: 'At least one recovery email is required.' });
+    await dbSetSetting('admin_recovery_emails', parts.join(','));
+    res.json({ success: true, emails: parts });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+app.get('/admin/api/admin-users', requireAdminAuth, async (req, res) => {
+  try {
+    const primary = await resolveAdminCredentials();
+    const extras = await readExtraAdmins();
+    const me = (req.adminToken && req.adminToken.username) || '';
+    const users = [{ username: primary.username, primary: true, isMe: me === primary.username }];
+    extras.forEach((e) => {
+      if (e && e.username) users.push({ username: e.username, primary: false, isMe: me === e.username });
+    });
+    res.json({ success: true, users });
+  } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
+// ---------------------------------------------------------------------------
+// Self-serve "Forgot password" via emailed reset link. Designed so the client
+// is NEVER locked out: clicking the link on the login page emails a one-time
+// reset token to a list of recovery emails (configurable, defaults below).
+// ---------------------------------------------------------------------------
+const DEFAULT_RECOVERY_EMAILS = ['ctc@cahitcontracting.com', 'twolf.om@gmail.com'];
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+async function getRecoveryEmails() {
+  const raw = (await dbGetSetting('admin_recovery_emails', '')) || '';
+  const parts = String(raw).split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean);
+  return parts.length ? parts : DEFAULT_RECOVERY_EMAILS.slice();
+}
+
+function makeResetToken() {
+  return require('crypto').randomBytes(32).toString('hex');
+}
+function hashResetToken(token) {
+  return require('crypto').createHash('sha256').update(String(token)).digest('hex');
+}
+// SECURITY: Reset links MUST come from a trusted origin only. Never derive from
+// the request's Host/X-Forwarded-Host headers — an attacker could submit a
+// forgot-password request with a forged Host and steer the emailed token to a
+// site they control. We honour PUBLIC_BASE_URL env, then an admin-configured
+// setting, then an explicit allowlist of known production hosts, and finally
+// fall back to the literal preview host (which is fine for dev).
+const TRUSTED_PUBLIC_HOSTS = [
+  'https://cahitcontracting.com',
+  'https://www.cahitcontracting.com'
+];
+async function trustedPublicBaseUrl(req) {
+  const env = process.env.PUBLIC_BASE_URL || process.env.SITE_URL || '';
+  if (env) return env.replace(/\/$/, '');
+  try {
+    const configured = (await dbGetSetting('public_base_url', '')) || '';
+    if (configured) return String(configured).replace(/\/$/, '');
+  } catch (_) {}
+  // Match request host against allowlist (case-insensitive, scheme-stripped).
+  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').toString().split(',')[0];
+  const host = (req.headers['x-forwarded-host'] || req.headers.host || '').toString().toLowerCase();
+  const candidate = (proto + '://' + host).replace(/\/$/, '');
+  for (const allowed of TRUSTED_PUBLIC_HOSTS) {
+    if (candidate === allowed.toLowerCase()) return allowed;
+  }
+  // Not on the allowlist — assume production domain so emailed links always
+  // point to the real site rather than a forged host.
+  return TRUSTED_PUBLIC_HOSTS[0];
+}
+
+// Simple in-memory rate limiter for the public reset endpoints. Keyed by
+// IP and (separately) by username — whichever limit hits first wins.
+const RESET_RATE = { ip: new Map(), user: new Map() };
+const RESET_RATE_WINDOW_MS = 15 * 60 * 1000; // 15 min
+const RESET_RATE_MAX_IP = 8;
+const RESET_RATE_MAX_USER = 4;
+function checkResetRate(key, bucket, max) {
+  const now = Date.now();
+  const arr = (bucket.get(key) || []).filter((t) => now - t < RESET_RATE_WINDOW_MS);
+  if (arr.length >= max) { bucket.set(key, arr); return false; }
+  arr.push(now); bucket.set(key, arr);
+  // Opportunistic cleanup
+  if (bucket.size > 500) {
+    for (const [k, v] of bucket) {
+      const fresh = v.filter((t) => now - t < RESET_RATE_WINDOW_MS);
+      if (!fresh.length) bucket.delete(k); else bucket.set(k, fresh);
+    }
+  }
+  return true;
+}
+
+async function sendResetEmail(toList, resetUrl, username) {
+  const { getResendClient } = require('./server/resendClient.cjs');
+  const { client, fromEmail } = await getResendClient();
+  const from = fromEmail || 'Cahit Admin <onboarding@resend.dev>';
+  const subject = 'Cahit Admin — Password reset link';
+  const text = [
+    'A password reset was requested for the Cahit admin account (' + username + ').',
+    '',
+    'Click the link below within the next hour to set a new password:',
+    resetUrl,
+    '',
+    'If you did NOT request this, you can safely ignore this email — the link will expire and no change will be made.',
+    '',
+    '— Cahit CRM'
+  ].join('\n');
+  const html = [
+    '<div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#0f172a">',
+      '<div style="background:#0A3D6B;color:#fff;padding:18px 22px;border-radius:10px 10px 0 0;font-size:18px;font-weight:600">Cahit Admin — Password reset</div>',
+      '<div style="border:1px solid #e2e8f0;border-top:0;border-radius:0 0 10px 10px;padding:22px;background:#fff">',
+        '<p style="margin:0 0 14px">A password reset was requested for the admin account <strong>', escapeHtml(username), '</strong>.</p>',
+        '<p style="margin:0 0 18px">Click the button below within the next hour to set a new password:</p>',
+        '<p style="margin:0 0 18px"><a href="', resetUrl, '" style="display:inline-block;background:#0ea5e9;color:#fff;padding:11px 22px;border-radius:8px;text-decoration:none;font-weight:600">Reset my password</a></p>',
+        '<p style="margin:0 0 12px;font-size:13px;color:#64748b">Or copy and paste this link:<br><span style="color:#0f172a;word-break:break-all">', resetUrl, '</span></p>',
+        '<hr style="border:0;border-top:1px solid #e2e8f0;margin:18px 0">',
+        '<p style="margin:0;font-size:12px;color:#64748b">If you did NOT request this, ignore this email — the link will expire and no change will be made.</p>',
+      '</div>',
+    '</div>'
+  ].join('');
+  return client.emails.send({ from: from, to: toList, subject: subject, text: text, html: html });
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+    return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+  });
+}
+
+// Public — no auth (admin is locked out). Always returns success=true to avoid
+// leaking which usernames exist. Quietly no-ops for unknown users.
+app.post('/admin/api/forgot-password', express.json(), async (req, res) => {
+  const recoveryEmails = await getRecoveryEmails().catch(() => DEFAULT_RECOVERY_EMAILS.slice());
+  // Always return the same generic ack — never leak account existence, rate
+  // limit state, or email delivery success/failure to the public caller.
+  const ack = { success: true, message: 'If that account exists, a reset link has been sent to the recovery email(s) on file.', sentTo: recoveryEmails.length };
+  try {
+    const supplied = String((req.body && req.body.username) || '').trim();
+    const ip = clientIpFromReq(req) || 'unknown';
+    // Per-IP throttle first (cheap, blocks flood attempts).
+    if (!checkResetRate(ip, RESET_RATE.ip, RESET_RATE_MAX_IP)) {
+      console.warn('[forgot-password] rate-limited ip=' + ip);
+      return res.json(ack);
+    }
+    if (!supplied) return res.json(ack);
+    const account = await findAdminByUsername(supplied);
+    if (!account) return res.json(ack);
+    // Per-username throttle so an attacker can't burn through tokens for a known account.
+    if (!checkResetRate(account.username.toLowerCase(), RESET_RATE.user, RESET_RATE_MAX_USER)) {
+      console.warn('[forgot-password] rate-limited user=' + account.username);
+      return res.json(ack);
+    }
+    if (!dbPool) {
+      console.error('[forgot-password] DB unavailable — cannot issue token');
+      return res.json(ack); // do not leak DB state
+    }
+    const token = makeResetToken();
+    const tokenHash = hashResetToken(token);
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
+    const baseUrl = await trustedPublicBaseUrl(req);
+    const resetUrl = baseUrl + '/admin/reset-password?token=' + encodeURIComponent(token);
+    // Try the email send FIRST. Only after delivery succeeds do we (a) wipe
+    // any prior unused tokens for this user and (b) record the new one. This
+    // way a transient Resend outage can never invalidate a working reset link
+    // the admin already has in their inbox.
+    try {
+      await sendResetEmail(recoveryEmails, resetUrl, account.username);
+    } catch (mailErr) {
+      console.error('[forgot-password] email send failed:', mailErr && mailErr.message);
+      return res.json(ack); // generic ack — don't leak delivery state
+    }
+    await dbQuery('DELETE FROM admin_password_resets WHERE username = $1 AND used_at IS NULL', [account.username]);
+    await dbQuery(
+      'INSERT INTO admin_password_resets (token_hash, username, expires_at, requester_ip) VALUES ($1, $2, $3, $4)',
+      [tokenHash, account.username, expiresAt, ip]
+    );
+    res.json(ack);
+  } catch (e) {
+    console.error('[forgot-password] error', e);
+    res.json(ack); // generic ack on any error path
+  }
+});
+
+// Public — token-gated. Validates the one-time token and sets a new password.
+app.post('/admin/api/forgot-password/confirm', express.json(), async (req, res) => {
+  try {
+    const ip = clientIpFromReq(req) || 'unknown';
+    if (!checkResetRate('confirm:' + ip, RESET_RATE.ip, RESET_RATE_MAX_IP * 2)) {
+      return res.status(429).json({ success: false, message: 'Too many attempts. Please wait a few minutes and try again.' });
+    }
+    const { token, newPassword } = req.body || {};
+    if (!token || !newPassword) return res.status(400).json({ success: false, message: 'Token and new password are required.' });
+    if (String(newPassword).length < 6) return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
+    if (!dbPool) return res.status(503).json({ success: false, message: 'Password reset requires database access.' });
+    const tokenHash = hashResetToken(token);
+    const r = await dbQuery(
+      'SELECT username, expires_at, used_at FROM admin_password_resets WHERE token_hash = $1',
+      [tokenHash]
+    );
+    const row = r && r.rows && r.rows[0];
+    if (!row) return res.status(400).json({ success: false, message: 'Invalid or expired reset link.' });
+    if (row.used_at) return res.status(400).json({ success: false, message: 'This reset link has already been used.' });
+    if (new Date(row.expires_at).getTime() < Date.now()) {
+      return res.status(400).json({ success: false, message: 'This reset link has expired. Request a new one.' });
+    }
+    const account = await findAdminByUsername(row.username);
+    if (!account) return res.status(400).json({ success: false, message: 'Account no longer exists.' });
+    if (account.primary) {
+      await persistAdminCredentials(account.username, hashPassword(newPassword));
+    } else {
+      await upsertExtraAdmin(account.username, newPassword);
+    }
+    await dbQuery('UPDATE admin_password_resets SET used_at = NOW() WHERE token_hash = $1', [tokenHash]);
+    // Kick all sessions for this user so old tokens stop working.
+    await revokeAdminSessionsForUser(account.username);
+    res.json({ success: true, message: 'Password reset. You can now sign in with your new password.', username: account.username });
+  } catch (e) {
+    console.error('[forgot-password/confirm] error', e);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// Public reset-password page (linked from the email).
+app.get('/admin/reset-password', (req, res) => {
+  const token = String((req.query && req.query.token) || '');
+  const safeToken = escapeHtml(token);
+  res.send(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reset Password — Cahit Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;color:#0f172a}
+.wrap{width:100%;max-width:420px}
+.brand{text-align:center;margin-bottom:24px;color:#fff}
+.brand .ic{width:56px;height:56px;background:#0ea5e9;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:24px;color:#fff;margin-bottom:14px}
+.brand h1{font-size:22px;font-weight:600}
+.card{background:#fff;border-radius:12px;padding:30px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.card h2{font-size:19px;margin-bottom:6px}
+.card p.sub{color:#64748b;font-size:14px;margin-bottom:20px}
+label{display:block;font-size:13px;font-weight:500;margin-bottom:6px;color:#334155}
+input{width:100%;padding:11px 14px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:#fff;color:#0f172a;margin-bottom:14px}
+input:focus{border-color:#0ea5e9;box-shadow:0 0 0 3px rgba(14,165,233,.1)}
+button{width:100%;padding:12px;background:#0ea5e9;color:#fff;border:0;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}
+button:hover{background:#0284c7}
+button:disabled{opacity:.6;cursor:not-allowed}
+.msg{padding:11px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;display:none}
+.msg.show{display:block}
+.msg.err{background:#fef2f2;border:1px solid #fecaca;color:#dc2626}
+.msg.ok{background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46}
+.foot{text-align:center;margin-top:20px}
+.foot a{color:#94a3b8;font-size:13px;text-decoration:none}
+</style></head><body>
+<div class="wrap">
+  <div class="brand"><div class="ic">C</div><h1>Cahit Admin</h1></div>
+  <div class="card">
+    <h2>Set a new password</h2>
+    <p class="sub">Pick a strong password you'll remember. The link expires in 1 hour and works only once.</p>
+    <div id="msg" class="msg"></div>
+    <form id="f">
+      <label>New password</label>
+      <input id="p1" type="password" minlength="6" required autocomplete="new-password">
+      <label>Confirm new password</label>
+      <input id="p2" type="password" minlength="6" required autocomplete="new-password">
+      <button id="b" type="submit">Reset password</button>
+    </form>
+  </div>
+  <div class="foot"><a href="/admin/login">&larr; Back to login</a></div>
+</div>
+<script>
+(function(){
+  var token=${JSON.stringify(token)};
+  var msg=document.getElementById('msg'),f=document.getElementById('f'),b=document.getElementById('b');
+  function showMsg(t,k){msg.textContent=t;msg.className='msg show '+k;}
+  if(!token){showMsg('Missing reset token. Use the link from your email.','err');b.disabled=true;return;}
+  f.addEventListener('submit',function(e){
+    e.preventDefault();
+    var p1=document.getElementById('p1').value,p2=document.getElementById('p2').value;
+    if(p1.length<6){showMsg('Password must be at least 6 characters.','err');return;}
+    if(p1!==p2){showMsg('Passwords do not match.','err');return;}
+    b.disabled=true;b.textContent='Resetting…';msg.className='msg';
+    fetch('/admin/api/forgot-password/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:token,newPassword:p1})})
+      .then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d}})})
+      .then(function(res){
+        if(res.ok&&res.d.success){showMsg('Password reset. Redirecting to login…','ok');setTimeout(function(){window.location.href='/admin/login';},1600);}
+        else{showMsg(res.d.message||'Reset failed.','err');b.disabled=false;b.textContent='Reset password';}
+      })
+      .catch(function(){showMsg('Network error.','err');b.disabled=false;b.textContent='Reset password';});
+  });
+})();
+</script></body></html>`);
+});
+
+app.post('/admin/api/admin-users/reset-password', requireAdminAuth, express.json(), async (req, res) => {
+  try {
+    const { targetUsername, currentPassword, newPassword } = req.body || {};
+    if (!targetUsername || !currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, message: 'targetUsername, currentPassword and newPassword are required' });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters' });
+    }
+    // Re-verify the caller's own password (acts as a re-auth confirmation so a
+    // stolen token alone can't reset other admins' passwords).
+    const myUsername = (req.adminToken && req.adminToken.username) || '';
+    const me = await findAdminByUsername(myUsername);
+    if (!me || !verifyPassword(currentPassword, me.passwordHash)) {
+      return res.status(400).json({ success: false, message: 'Your current password is incorrect' });
+    }
+    const target = await findAdminByUsername(targetUsername);
+    if (!target) return res.status(404).json({ success: false, message: 'Admin user not found' });
+    // This endpoint is the recovery path for *another* admin. Self-changes
+    // must go through Account Security (change-credentials) which handles
+    // your own token rotation cleanly.
+    if (String(target.username).toLowerCase() === String(me.username).toLowerCase()) {
+      return res.status(400).json({ success: false, message: 'Use Account Security to change your own password' });
+    }
+    if (target.primary) {
+      await persistAdminCredentials(target.username, hashPassword(newPassword));
+    } else {
+      await upsertExtraAdmin(target.username, newPassword);
+    }
+    // Kick the target off every active session (DB rows and file fallback)
+    // so the old password can't be used to ride an existing token. Caller's
+    // own token is unaffected.
+    await revokeAdminSessionsForUser(target.username);
+    res.json({ success: true, message: 'Password reset for ' + target.username });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
 });
 
 const UPLOADS_DIR = process.env.VERCEL ? '/tmp/uploads' : path.join(THEME_DIR, 'uploads');
@@ -2070,7 +2496,10 @@ app.put('/admin/api/site-content/:key', requireAdminAuth, express.json(), async 
     await dbSetSetting('content_' + req.params.key, JSON.stringify(req.body.data || {}));
     // Notify other live admins that this section just changed so their editor
     // can auto-refresh. Best-effort; presence failure must not break save.
-    try { await recordPresenceSave(req.params.key, req.adminToken && req.adminToken.username); } catch (e) {}
+    try {
+      const sid = ((req.adminToken && req.adminToken.tokenId) || 'tok') + ':' + String((req.body && req.body.clientId) || '').slice(0, 40);
+      await recordPresenceSave(req.params.key, sid, req.adminToken && req.adminToken.username);
+    } catch (e) {}
     res.json({ success: true });
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
@@ -2108,38 +2537,52 @@ function prunePresence(state) {
 async function writePresence(state) {
   await dbSetSetting(PRESENCE_KEY, JSON.stringify(state));
 }
-async function recordPresenceSave(sectionKey, username) {
+async function recordPresenceSave(sectionKey, sessionId, username) {
   const state = prunePresence(await readPresence());
-  state.saves[sectionKey] = { ts: Date.now(), by: username || 'admin' };
+  state.saves[sectionKey] = { ts: Date.now(), by: username || 'admin', sid: sessionId || '' };
   await writePresence(state);
 }
 
 // Heartbeat: client calls this every few seconds with its current screen.
-// Body: { page: 'content', label: 'Editing: About > Hero' }
-// Response includes the *other* online admins and recent save events so the
-// client can render the presence pill and auto-refresh when needed.
+// Body: { page: 'content', label: 'Editing: About > Hero', clientId?: '...' }
+// Response includes the *other* online admin sessions and recent save events
+// so the client can render the presence pill and auto-refresh when needed.
+//
+// IMPORTANT: presence is keyed by *session* (token id + a per-tab clientId),
+// NOT by username. Multiple browsers / tabs / people can share one admin
+// account and we still want to show them as separate live participants.
 app.post('/admin/api/presence', requireAdminAuth, express.json(), async (req, res) => {
   try {
-    const me = (req.adminToken && req.adminToken.username) || 'admin';
-    const page = String((req.body && req.body.page) || '').slice(0, 60);
-    const label = String((req.body && req.body.label) || '').slice(0, 200);
+    const username = (req.adminToken && req.adminToken.username) || 'admin';
+    const tokenId = (req.adminToken && req.adminToken.tokenId) || '';
+    const clientId = String((req.body && req.body.clientId) || '').slice(0, 40);
+    const sessionKey = (tokenId || 'tok') + ':' + (clientId || 'tab');
+    const body = req.body || {};
+    const page = String(body.page || '').slice(0, 60);
+    const label = String(body.label || '').slice(0, 200);
+    const editingPage = String(body.editingPage || '').slice(0, 120);
+    const editingSection = String(body.editingSection || '').slice(0, 80);
+    const detailSlug = String(body.detailSlug || '').slice(0, 120);
     const state = prunePresence(await readPresence());
-    state.users[me] = { page, label, ts: Date.now() };
+    state.users[sessionKey] = { user: username, page, label, editingPage, editingSection, detailSlug, ts: Date.now() };
     await writePresence(state);
     const others = Object.keys(state.users)
-      .filter((u) => u !== me)
-      .map((u) => Object.assign({ user: u }, state.users[u]));
-    res.json({ success: true, me: me, others: others, saves: state.saves, serverTs: Date.now() });
+      .filter((k) => k !== sessionKey)
+      .map((k) => Object.assign({ sid: k }, state.users[k]));
+    res.json({ success: true, me: username, mySid: sessionKey, others: others, saves: state.saves, serverTs: Date.now() });
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
 
 // Sign-out: drop my presence entry immediately so the other admin sees me
-// disappear without waiting for the 15s TTL.
-app.post('/admin/api/presence/leave', requireAdminAuth, async (req, res) => {
+// disappear without waiting for the 15s TTL. Body may include clientId so the
+// right per-tab session is removed.
+app.post('/admin/api/presence/leave', requireAdminAuth, express.json(), async (req, res) => {
   try {
-    const me = (req.adminToken && req.adminToken.username) || 'admin';
+    const tokenId = (req.adminToken && req.adminToken.tokenId) || '';
+    const clientId = String((req.body && req.body.clientId) || '').slice(0, 40);
+    const sessionKey = (tokenId || 'tok') + ':' + (clientId || 'tab');
     const state = prunePresence(await readPresence());
-    delete state.users[me];
+    delete state.users[sessionKey];
     await writePresence(state);
     res.json({ success: true });
   } catch (e) { res.json({ success: false, error: e.message }); }
@@ -2628,6 +3071,7 @@ async function initDatabase() {
     await dbQuery(`CREATE TABLE IF NOT EXISTS blog_media (id SERIAL PRIMARY KEY, mime_type VARCHAR(100) NOT NULL DEFAULT 'application/octet-stream', original_name VARCHAR(500) DEFAULT '', data BYTEA NOT NULL, created_at TIMESTAMP DEFAULT NOW())`);
     await dbQuery(`CREATE TABLE IF NOT EXISTS page_views (id SERIAL PRIMARY KEY, page VARCHAR(500) NOT NULL, referrer VARCHAR(1000) DEFAULT '', user_agent TEXT DEFAULT '', session_id VARCHAR(100) DEFAULT '', ip VARCHAR(100) DEFAULT '', created_at TIMESTAMP DEFAULT NOW())`);
     await dbQuery(`CREATE TABLE IF NOT EXISTS admin_sessions (token_id VARCHAR(64) PRIMARY KEY, username VARCHAR(255) NOT NULL DEFAULT '', expires_at TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW())`);
+    await dbQuery(`CREATE TABLE IF NOT EXISTS admin_password_resets (token_hash VARCHAR(128) PRIMARY KEY, username VARCHAR(255) NOT NULL, expires_at TIMESTAMPTZ NOT NULL, used_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT NOW(), requester_ip VARCHAR(100) DEFAULT '')`);
     await dbQuery(`ALTER TABLE admin_sessions ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ`);
     await dbQuery(`ALTER TABLE admin_sessions ADD COLUMN IF NOT EXISTS last_ip VARCHAR(100) DEFAULT ''`);
     await dbQuery(`ALTER TABLE admin_sessions ADD COLUMN IF NOT EXISTS last_user_agent VARCHAR(500) DEFAULT ''`);

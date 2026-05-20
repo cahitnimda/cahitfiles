@@ -723,7 +723,14 @@ h1, h2, h3, h4, h5, h6 {
 .project-card-desc ul, .project-card-desc ol { margin: 0 0 0.5rem; padding-left: 1.25rem; }
 .detail-content p { margin: 0 0 1rem; }
 .detail-content p:last-child { margin-bottom: 0; }
-.detail-content ul, .detail-content ol { margin: 0 0 1rem; padding-left: 1.5rem; }
+.detail-content ul, .detail-content ol, .service-rich ul, .service-rich ol { margin: 0 0 1rem; padding-inline-start: 1.5rem; list-style-position: outside; }
+.detail-content ul, .service-rich ul { list-style: disc; }
+.detail-content ol, .service-rich ol { list-style: decimal; }
+.detail-content li, .service-rich li { margin-bottom: .5rem; line-height: 1.7; }
+.service-rich p { margin: 0 0 .9rem; }
+.service-rich p:last-child, .service-rich ul:last-child, .service-rich ol:last-child { margin-bottom: 0; }
+html.is-rtl .detail-content ul, html.is-rtl .detail-content ol, html.is-rtl .service-rich ul, html.is-rtl .service-rich ol { padding-inline-start: 1.5rem; padding-right: 1.5rem; padding-left: 0; }
+html.is-rtl .service-rich, html.is-rtl .detail-content { text-align: right; direction: rtl; }
 
 .service-card-link {
   display: inline-flex;

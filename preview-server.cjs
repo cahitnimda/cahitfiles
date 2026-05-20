@@ -2978,6 +2978,44 @@ app.get('/projects/:slug', async (req, res) => {
   }
 });
 
+// Auto-format admin content so plain-text-with-bullets ("• item\n• item")
+// renders as a real <ul><li> on the live site. Without this, the editor's
+// bullet characters were being injected raw and CSS white-space:normal made
+// every line collapse into one paragraph.
+function normalizeRichText(raw) {
+  if (!raw) return '';
+  const s = String(raw).trim();
+  if (!s) return '';
+  // If author already wrote real HTML blocks, leave it alone.
+  if (/<(ul|ol|li|p|h[1-6]|div|table|br\s*\/?)>/i.test(s)) return s;
+  // Split on line breaks (real or HTML <br>).
+  const lines = s
+    .replace(/<br\s*\/?>/gi, '\n')
+    .split(/\r?\n/)
+    .map((l) => l.replace(/\u00A0/g, ' ').trim())
+    .filter(Boolean);
+  if (!lines.length) return s;
+  const out = [];
+  let bulletBuf = [];
+  const flushBullets = () => {
+    if (!bulletBuf.length) return;
+    out.push('<ul style="margin:0 0 1rem;padding-inline-start:1.4rem;list-style:disc">' +
+      bulletBuf.map((b) => '<li style="margin-bottom:.5rem">' + b + '</li>').join('') + '</ul>');
+    bulletBuf = [];
+  };
+  for (const line of lines) {
+    const m = line.match(/^[\u2022\u25CF\u25E6\u2043\u2219\*\-–—›▪◦·]+\s*(.+)$/);
+    if (m) {
+      bulletBuf.push(m[1].trim());
+    } else {
+      flushBullets();
+      out.push('<p style="margin:0 0 .8rem">' + line + '</p>');
+    }
+  }
+  flushBullets();
+  return out.join('');
+}
+
 app.get('/services/:slug', async (req, res) => {
   try {
     const slug = req.params.slug;
@@ -3046,9 +3084,24 @@ app.get('/services/:slug', async (req, res) => {
       </section>
       <section class="section bg-white">
         <div class="container" style="max-width:900px;margin:0 auto">
-          ${content ? '<div class="detail-content" data-field="service-detail-content"' + (contentAr ? ' data-ar-html="' + contentAr.replace(/"/g, '&quot;') + '"' : '') + ' style="font-size:1.05rem;line-height:1.8;color:#334155;white-space:normal">' + content + '</div>' : '<div class="detail-content" style="font-size:1.05rem;line-height:1.8;color:#64748b;text-align:center;padding:3rem 0">Detail content coming soon. Edit this page from the admin dashboard.</div>'}
-          ${features ? '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem" data-ar="الميزات والقدرات الرئيسية">Key Features & Capabilities</h3><div data-field="service-detail-features"' + (featuresAr ? ' data-ar-html="' + featuresAr.replace(/"/g, '&quot;') + '"' : '') + ' style="font-size:1rem;line-height:1.8;color:#334155;white-space:normal">' + features + '</div></div>' : ''}
-          ${process ? '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem" data-ar="منهجيتنا في العمل">Our Process & Approach</h3><div data-field="service-detail-process"' + (processAr ? ' data-ar-html="' + processAr.replace(/"/g, '&quot;') + '"' : '') + ' style="font-size:1rem;line-height:1.8;color:#334155;white-space:normal">' + process + '</div></div>' : ''}
+          ${(function(){
+            const cN = normalizeRichText(content);
+            const cAr = normalizeRichText(contentAr);
+            if (!cN) return '<div class="detail-content service-rich" style="font-size:1.05rem;line-height:1.8;color:#64748b;text-align:center;padding:3rem 0">Detail content coming soon. Edit this page from the admin dashboard.</div>';
+            return '<div class="detail-content service-rich" data-field="service-detail-content"' + (cAr ? ' data-ar-html="' + cAr.replace(/"/g, '&quot;') + '"' : '') + ' style="font-size:1.05rem;line-height:1.8;color:#334155">' + cN + '</div>';
+          })()}
+          ${(function(){
+            const fN = normalizeRichText(features);
+            if (!fN) return '';
+            const fAr = normalizeRichText(featuresAr);
+            return '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem" data-ar="الميزات والقدرات الرئيسية">Key Features & Capabilities</h3><div class="service-rich" data-field="service-detail-features"' + (fAr ? ' data-ar-html="' + fAr.replace(/"/g, '&quot;') + '"' : '') + ' style="font-size:1rem;line-height:1.8;color:#334155">' + fN + '</div></div>';
+          })()}
+          ${(function(){
+            const pN = normalizeRichText(process);
+            if (!pN) return '';
+            const pAr = normalizeRichText(processAr);
+            return '<div style="margin-top:2rem"><h3 style="font-size:1.2rem;font-weight:600;color:#0A3D6B;margin-bottom:1rem" data-ar="منهجيتنا في العمل">Our Process & Approach</h3><div class="service-rich" data-field="service-detail-process"' + (pAr ? ' data-ar-html="' + pAr.replace(/"/g, '&quot;') + '"' : '') + ' style="font-size:1rem;line-height:1.8;color:#334155">' + pN + '</div></div>';
+          })()}
           ${galleryHtml}
           <div style="margin-top:3rem;padding-top:2rem;border-top:1px solid #e2e8f0">
             <a href="/services" class="service-card-link" style="font-size:1rem">&larr; Back to Services</a>

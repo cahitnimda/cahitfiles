@@ -2978,16 +2978,48 @@ app.get('/projects/:slug', async (req, res) => {
   }
 });
 
+// Strip the avalanche of garbage Microsoft Word/Outlook injects when content
+// is pasted from a .doc: namespaced tags (<o:p>, <w:*>, <v:*>, <m:*>, <xml>),
+// MSO conditional blocks (<!--[if ...]>..<![endif]-->), bare conditionals
+// (<![if !supportLists]>..<![endif]>) that confuse the HTML parser and cause
+// adjacent <span> openings to render as visible text, inline <style> blocks,
+// mso-* CSS, MsoNormal classes, and Word-specific attributes.
+function sanitizeWordHtml(raw) {
+  if (!raw) return '';
+  let s = String(raw);
+  s = s.replace(/<!--\[if[\s\S]*?\[endif\]-->/gi, '');
+  s = s.replace(/<!\[if[\s\S]*?\[endif\]>/gi, '');
+  s = s.replace(/<!\[endif\]>/gi, '');
+  s = s.replace(/<!\[if[^\]]*\]>/gi, '');
+  s = s.replace(/<\?xml[\s\S]*?\?>/gi, '');
+  s = s.replace(/<xml[\s\S]*?<\/xml>/gi, '');
+  s = s.replace(/<(o|w|v|m|st1):[^>]*>/gi, '');
+  s = s.replace(/<\/(o|w|v|m|st1):[^>]*>/gi, '');
+  s = s.replace(/<style[\s\S]*?<\/style>/gi, '');
+  s = s.replace(/<meta[^>]*>/gi, '');
+  s = s.replace(/<link[^>]*>/gi, '');
+  s = s.replace(/<title[\s\S]*?<\/title>/gi, '');
+  s = s.replace(/<!--[\s\S]*?-->/g, '');
+  s = s.replace(/\sclass="?Mso[^"\s>]*"?/gi, '');
+  s = s.replace(/\s(lang|xml:lang)="[^"]*"/gi, '');
+  s = s.replace(/\sstyle="[^"]*mso-[^"]*"/gi, '');
+  s = s.replace(/<(\/?)font[^>]*>/gi, '');
+  s = s.replace(/<span[^>]*>(\s|&nbsp;)*<\/span>/gi, '');
+  s = s.replace(/<p[^>]*>\s*<\/p>/gi, '');
+  s = s.replace(/(\s|&nbsp;){3,}/g, ' ');
+  return s.trim();
+}
+
 // Auto-format admin content so plain-text-with-bullets ("• item\n• item")
 // renders as a real <ul><li> on the live site. Without this, the editor's
 // bullet characters were being injected raw and CSS white-space:normal made
 // every line collapse into one paragraph.
 function normalizeRichText(raw) {
   if (!raw) return '';
-  const s = String(raw).trim();
+  let s = sanitizeWordHtml(String(raw)).trim();
   if (!s) return '';
   // If author already wrote real HTML blocks, leave it alone.
-  if (/<(ul|ol|li|p|h[1-6]|div|table|br\s*\/?)>/i.test(s)) return s;
+  if (/<(ul|ol|li|p|h[1-6]|div|table|blockquote|br)(\s|>|\/)/i.test(s)) return s;
   // Split on line breaks (real or HTML <br>).
   const lines = s
     .replace(/<br\s*\/?>/gi, '\n')

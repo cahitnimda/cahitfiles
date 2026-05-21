@@ -174,6 +174,11 @@
     fetch('/admin/api/site-content/' + loadKey, { headers: authHeaders() }).then(function(r) { return r.json(); }).then(function(d) {
       if (d.success && d.data) {
         var data = d.data;
+        // Mark this section as server-loaded so populateFieldsFromPreview
+        // (which runs from preview iframe text) does not later overwrite
+        // DB-saved richtext with plain text.
+        state._serverLoaded = state._serverLoaded || {};
+        state._serverLoaded[section] = true;
         Object.keys(data).forEach(function(key) {
           if (!state.editedContent[key]) {
             state.editedContent[key] = data[key];
@@ -181,6 +186,12 @@
             if (field) {
               if (field.tagName === 'TEXTAREA') field.value = data[key];
               else if (field.tagName === 'INPUT') field.value = data[key];
+              else if (field.classList && field.classList.contains('live-edit-richtext')) {
+                // Push value into Quill if upgraded, else into the
+                // contenteditable directly.
+                if (field._quill) { field._quill.root.innerHTML = data[key] || ''; }
+                else { field.innerHTML = data[key] || ''; }
+              }
             }
           }
         });
@@ -1838,12 +1849,15 @@
         }).then(function(r) { return r.json(); }).then(function(result) {
           saveBtn.disabled = false;
           saveBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save';
-          if (result.success) {
+          if (result && result.success) {
+            state._saveFailed = false;
             showToast('Content saved successfully', 'success');
           } else {
-            showToast('Error saving: ' + (result.error || 'Unknown error'), 'error');
+            state._saveFailed = true;
+            showToast('Error saving: ' + ((result && result.error) || 'Unknown error'), 'error');
           }
         }).catch(function(err) {
+          state._saveFailed = true;
           saveBtn.disabled = false;
           saveBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save';
           showToast('Error saving content', 'error');
@@ -2575,18 +2589,25 @@
   function populateFieldsFromPreview() {
     var iframe = document.getElementById('previewFrame');
     if (!iframe || !iframe.contentDocument) return;
+    // If the DB load has already populated this section, do NOT overwrite
+    // anything from preview text — DB is the source of truth.
+    if (state._serverLoaded && state._serverLoaded[state.editingSection]) return;
     var fields = sectionFields[state.editingSection] || [];
     fields.forEach(function(f) {
       if (state.editedContent[f.key]) return;
       try {
         var el = iframe.contentDocument.querySelector(f.selector);
-        if (el) {
-          var inputEl = document.querySelector('[data-key="' + f.key + '"]');
-          if (inputEl && !inputEl.value) {
-            var text = el.textContent.trim();
-            inputEl.value = text;
-            state.editedContent[f.key] = text;
-          }
+        if (!el) return;
+        var inputEl = document.querySelector('[data-key="' + f.key + '"]');
+        if (!inputEl) return;
+        // Never push preview plain-text into a richtext field — it would
+        // strip formatting from the Quill editor. Richtext gets its initial
+        // value from the PHP-rendered editor template or the DB load.
+        if (inputEl.classList && inputEl.classList.contains('live-edit-richtext')) return;
+        if (!inputEl.value) {
+          var text = el.textContent.trim();
+          inputEl.value = text;
+          state.editedContent[f.key] = text;
         }
       } catch(e) {}
     });

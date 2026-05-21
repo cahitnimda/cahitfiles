@@ -1647,6 +1647,10 @@ app.post('/admin/api/change-credentials', requireAdminAuth, express.json(), asyn
   const nextUsername = newUsername && newUsername.trim() ? newUsername.trim() : creds.username;
   const nextHash = hashPassword(newPassword);
   await persistAdminCredentials(nextUsername, nextHash);
+  // (14) Track when the password was last rotated so the admin UI can show
+  // a "rotate your password" banner after 90 days.
+  try { await dbSetSetting('admin_password_changed_at', String(Date.now())); } catch (e) {}
+  try { await logActivity(nextUsername, 'admin.password_change', '', null, req); } catch (e) {}
   const newVersion = await bumpTokenVersion();
   // Bumping the version invalidates all old tokens; also clear the per-token
   // allow-list so stale rows don't accumulate.
@@ -1661,8 +1665,21 @@ app.post('/admin/api/change-credentials', requireAdminAuth, express.json(), asyn
   res.json({ success: true, token: issued.token, message: 'Credentials updated successfully' });
 });
 
-app.get('/admin/api/verify', requireAdminAuth, (req, res) => {
-  res.json({ success: true });
+app.get('/admin/api/verify', requireAdminAuth, async (req, res) => {
+  // (14) Surface password age so the admin UI can show a rotation banner.
+  let passwordChangedAt = 0;
+  try {
+    const v = await dbGetSetting('admin_password_changed_at', '');
+    passwordChangedAt = Number(v) || 0;
+  } catch (e) {}
+  const ageDays = passwordChangedAt ? Math.floor((Date.now() - passwordChangedAt) / 86400000) : null;
+  res.json({
+    success: true,
+    username: (req.adminToken && req.adminToken.username) || 'admin',
+    passwordChangedAt: passwordChangedAt || null,
+    passwordAgeDays: ageDays,
+    passwordRotationDue: ageDays != null && ageDays >= 90
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -2519,7 +2536,16 @@ app.get('/admin/api/site-content/:key', requireAdminAuth, async (req, res) => {
 
 app.put('/admin/api/site-content/:key', requireAdminAuth, express.json(), async (req, res) => {
   try {
-    await dbSetSetting('content_' + req.params.key, JSON.stringify(req.body.data || {}));
+    // (4) Deep-clean every value before persisting so Word/MSO garbage is
+    // stripped no matter which input path it came from (paste, drag-drop,
+    // programmatic save, etc).
+    const cleaned = deepSanitizeContent(req.body.data || {});
+    await dbSetSetting('content_' + req.params.key, JSON.stringify(cleaned));
+    // (9) Save a revision snapshot.
+    const actor = (req.adminToken && req.adminToken.username) || 'admin';
+    saveContentRevision('content_' + req.params.key, cleaned, actor).catch(() => {});
+    // (12) Activity log
+    logActivity(actor, 'content.save', req.params.key, { fields: Object.keys(cleaned || {}).length }, req).catch(() => {});
     // Notify other live admins that this section just changed so their editor
     // can auto-refresh. Best-effort; presence failure must not break save.
     try {
@@ -3048,6 +3074,283 @@ function normalizeRichText(raw) {
   return out.join('');
 }
 
+// ---------------------------------------------------------------------------
+// (A) Deep sanitizer — applied to every value the admin saves into a
+// site-content blob. Recursively walks objects/arrays so even nested rich-text
+// fields get the Word/MSO garbage stripped before it reaches the DB.
+// ---------------------------------------------------------------------------
+function deepSanitizeContent(node) {
+  if (node == null) return node;
+  if (typeof node === 'string') {
+    // Only strings >150 chars or containing tags are likely rich content.
+    if (node.length > 30 && /<[a-z!\/]/i.test(node)) return sanitizeWordHtml(node);
+    return node;
+  }
+  if (Array.isArray(node)) return node.map(deepSanitizeContent);
+  if (typeof node === 'object') {
+    const out = {};
+    for (const k of Object.keys(node)) out[k] = deepSanitizeContent(node[k]);
+    return out;
+  }
+  return node;
+}
+
+// ---------------------------------------------------------------------------
+// Auxiliary tables: revisions (per-field history), activity_log (who did what
+// when), error_log (client-captured JS errors).
+// ---------------------------------------------------------------------------
+async function ensureAuxTables() {
+  if (!dbPool) return;
+  try {
+    await dbQuery(`CREATE TABLE IF NOT EXISTS content_revisions (
+      id SERIAL PRIMARY KEY,
+      section_key TEXT NOT NULL,
+      data JSONB NOT NULL,
+      saved_by TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`);
+    await dbQuery(`CREATE INDEX IF NOT EXISTS idx_revisions_section ON content_revisions(section_key, created_at DESC)`);
+    await dbQuery(`CREATE TABLE IF NOT EXISTS activity_log (
+      id SERIAL PRIMARY KEY,
+      actor TEXT,
+      action TEXT NOT NULL,
+      target TEXT,
+      meta JSONB,
+      ip TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`);
+    await dbQuery(`CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_log(created_at DESC)`);
+    await dbQuery(`CREATE TABLE IF NOT EXISTS error_log (
+      id SERIAL PRIMARY KEY,
+      level TEXT,
+      message TEXT,
+      url TEXT,
+      line INTEGER,
+      col INTEGER,
+      stack TEXT,
+      user_agent TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`);
+    await dbQuery(`CREATE INDEX IF NOT EXISTS idx_errors_created ON error_log(created_at DESC)`);
+  } catch (e) { console.error('Aux table init error:', e.message); }
+}
+
+async function logActivity(actor, action, target, meta, req) {
+  if (!dbPool) return;
+  try {
+    const ip = req ? (req.headers['x-forwarded-for'] || req.ip || '').toString().split(',')[0].trim() : '';
+    await dbQuery(
+      'INSERT INTO activity_log (actor, action, target, meta, ip) VALUES ($1, $2, $3, $4, $5)',
+      [actor || 'admin', action, target || '', meta ? JSON.stringify(meta) : null, ip]
+    );
+    // Trim — keep last 1000 rows.
+    await dbQuery('DELETE FROM activity_log WHERE id < (SELECT COALESCE(MIN(id),0) FROM (SELECT id FROM activity_log ORDER BY id DESC LIMIT 1000) t)');
+  } catch (e) {}
+}
+
+async function saveContentRevision(sectionKey, data, savedBy) {
+  if (!dbPool) return;
+  try {
+    await dbQuery(
+      'INSERT INTO content_revisions (section_key, data, saved_by) VALUES ($1, $2, $3)',
+      [sectionKey, JSON.stringify(data || {}), savedBy || 'admin']
+    );
+    // Keep last 20 revisions per section.
+    await dbQuery(`DELETE FROM content_revisions WHERE section_key=$1 AND id NOT IN (
+      SELECT id FROM content_revisions WHERE section_key=$1 ORDER BY created_at DESC LIMIT 20
+    )`, [sectionKey]);
+  } catch (e) {}
+}
+
+// ---------------------------------------------------------------------------
+// Revision history endpoints
+// ---------------------------------------------------------------------------
+app.get('/admin/api/site-content/:key/revisions', requireAdminAuth, async (req, res) => {
+  try {
+    const r = await dbQuery(
+      'SELECT id, saved_by, created_at FROM content_revisions WHERE section_key=$1 ORDER BY created_at DESC LIMIT 20',
+      ['content_' + req.params.key]
+    );
+    res.json({ success: true, revisions: r ? r.rows : [] });
+  } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
+app.get('/admin/api/site-content/:key/revisions/:id', requireAdminAuth, async (req, res) => {
+  try {
+    const r = await dbQuery(
+      'SELECT id, data, saved_by, created_at FROM content_revisions WHERE id=$1 AND section_key=$2',
+      [req.params.id, 'content_' + req.params.key]
+    );
+    if (!r || !r.rows.length) return res.status(404).json({ success: false, error: 'not found' });
+    res.json({ success: true, revision: r.rows[0] });
+  } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
+app.post('/admin/api/site-content/:key/restore/:id', requireAdminAuth, express.json(), async (req, res) => {
+  try {
+    const r = await dbQuery(
+      'SELECT data FROM content_revisions WHERE id=$1 AND section_key=$2',
+      [req.params.id, 'content_' + req.params.key]
+    );
+    if (!r || !r.rows.length) return res.status(404).json({ success: false, error: 'not found' });
+    const data = r.rows[0].data;
+    const dataStr = typeof data === 'string' ? data : JSON.stringify(data);
+    await dbSetSetting('content_' + req.params.key, dataStr);
+    await saveContentRevision('content_' + req.params.key, typeof data === 'string' ? JSON.parse(data) : data, (req.adminToken && req.adminToken.username) || 'admin');
+    await logActivity((req.adminToken && req.adminToken.username) || 'admin', 'content.restore', req.params.key, { revision: req.params.id }, req);
+    res.json({ success: true });
+  } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
+// ---------------------------------------------------------------------------
+// (10) DB backup — returns a JSON snapshot of all editable tables. Streamed
+// as a downloadable file the admin can save anywhere.
+// ---------------------------------------------------------------------------
+app.get('/admin/api/backup', requireAdminAuth, async (req, res) => {
+  try {
+    const dump = { generated_at: new Date().toISOString(), tables: {} };
+    const tables = ['site_settings', 'blog_posts', 'leads', 'chatbot_knowledge', 'content_revisions', 'activity_log'];
+    for (const t of tables) {
+      try {
+        const r = await dbQuery('SELECT * FROM ' + t);
+        dump.tables[t] = r ? r.rows : [];
+      } catch (e) { dump.tables[t] = { error: e.message }; }
+    }
+    await logActivity((req.adminToken && req.adminToken.username) || 'admin', 'backup.download', '', null, req);
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename="cahit-backup-' + new Date().toISOString().slice(0,10) + '.json"');
+    res.send(JSON.stringify(dump, null, 2));
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ---------------------------------------------------------------------------
+// (11) Error log — admin.js posts uncaught JS errors here so we can see
+// what's blowing up in the field without waiting for the admin to tell us.
+// ---------------------------------------------------------------------------
+app.post('/admin/api/error-log', express.json({ limit: '256kb' }), async (req, res) => {
+  try {
+    if (!dbPool) return res.json({ success: true });
+    const b = req.body || {};
+    await dbQuery(
+      'INSERT INTO error_log (level, message, url, line, col, stack, user_agent) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [
+        String(b.level || 'error').slice(0, 20),
+        String(b.message || '').slice(0, 4000),
+        String(b.url || '').slice(0, 500),
+        Number(b.line) || 0,
+        Number(b.col) || 0,
+        String(b.stack || '').slice(0, 8000),
+        String((req.headers['user-agent']) || '').slice(0, 300)
+      ]
+    );
+    // Cap at 500 rows.
+    await dbQuery('DELETE FROM error_log WHERE id < (SELECT COALESCE(MIN(id),0) FROM (SELECT id FROM error_log ORDER BY id DESC LIMIT 500) t)');
+    res.json({ success: true });
+  } catch (e) { res.json({ success: false }); }
+});
+
+app.get('/admin/api/error-log', requireAdminAuth, async (req, res) => {
+  try {
+    const r = await dbQuery('SELECT id, level, message, url, line, stack, user_agent, created_at FROM error_log ORDER BY created_at DESC LIMIT 100');
+    res.json({ success: true, errors: r ? r.rows : [] });
+  } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
+// ---------------------------------------------------------------------------
+// (12) Activity log endpoint
+// ---------------------------------------------------------------------------
+app.get('/admin/api/activity-log', requireAdminAuth, async (req, res) => {
+  try {
+    const r = await dbQuery('SELECT id, actor, action, target, meta, ip, created_at FROM activity_log ORDER BY created_at DESC LIMIT 200');
+    res.json({ success: true, entries: r ? r.rows : [] });
+  } catch (e) { res.json({ success: false, error: e.message }); }
+});
+
+// ---------------------------------------------------------------------------
+// (13) /admin/health — quick visual status page. No auth (info only, no secrets).
+// ---------------------------------------------------------------------------
+app.get('/admin/health', async (req, res) => {
+  const checks = [];
+  let dbOk = false;
+  let dbLatency = 0;
+  if (dbPool) {
+    const t0 = Date.now();
+    try { await dbQuery('SELECT 1'); dbOk = true; dbLatency = Date.now() - t0; } catch (e) {}
+  }
+  checks.push({ name: 'Database', ok: dbOk, detail: dbOk ? (dbLatency + 'ms') : 'unavailable' });
+  let openaiOk = false;
+  try { const k = await dbGetSetting('openai_api_key', ''); openaiOk = !!(k && k.length > 20); } catch (e) {}
+  checks.push({ name: 'OpenAI key', ok: openaiOk, detail: openaiOk ? 'configured' : 'missing' });
+  let resendOk = !!(process.env.RESEND_API_KEY);
+  checks.push({ name: 'Resend (email)', ok: resendOk, detail: resendOk ? 'configured' : 'missing' });
+  let leadCount = 0, blogCount = 0, settingCount = 0;
+  try {
+    const r1 = await dbQuery('SELECT COUNT(*)::int AS c FROM leads'); leadCount = r1 && r1.rows[0] ? r1.rows[0].c : 0;
+    const r2 = await dbQuery('SELECT COUNT(*)::int AS c FROM blog_posts'); blogCount = r2 && r2.rows[0] ? r2.rows[0].c : 0;
+    const r3 = await dbQuery('SELECT COUNT(*)::int AS c FROM site_settings'); settingCount = r3 && r3.rows[0] ? r3.rows[0].c : 0;
+  } catch (e) {}
+  let recentErrors = 0;
+  try {
+    const r = await dbQuery("SELECT COUNT(*)::int AS c FROM error_log WHERE created_at > NOW() - INTERVAL '24 hours'");
+    recentErrors = r && r.rows[0] ? r.rows[0].c : 0;
+  } catch (e) {}
+  const overall = checks.every((c) => c.ok);
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Cahit Health</title>
+<style>
+body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:720px;margin:40px auto;padding:0 20px;color:#0f172a}
+h1{font-size:22px;margin:0 0 8px}
+.pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.ok{background:#dcfce7;color:#166534}.bad{background:#fee2e2;color:#991b1b}
+table{width:100%;border-collapse:collapse;margin-top:18px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:14px}
+th{background:#f8fafc;font-weight:600}
+.meta{margin-top:24px;font-size:13px;color:#64748b}
+a{color:#0284c7}
+</style></head><body>
+<h1>Cahit Contracting — System Health <span class="pill ${overall?'ok':'bad'}">${overall?'OK':'DEGRADED'}</span></h1>
+<table>
+<tr><th>Check</th><th>Status</th><th>Detail</th></tr>
+${checks.map((c)=>`<tr><td>${c.name}</td><td><span class="pill ${c.ok?'ok':'bad'}">${c.ok?'OK':'FAIL'}</span></td><td>${c.detail}</td></tr>`).join('')}
+<tr><td>Leads in DB</td><td><span class="pill ok">${leadCount}</span></td><td></td></tr>
+<tr><td>Blog posts</td><td><span class="pill ok">${blogCount}</span></td><td></td></tr>
+<tr><td>Settings rows</td><td><span class="pill ok">${settingCount}</span></td><td></td></tr>
+<tr><td>Errors (last 24h)</td><td><span class="pill ${recentErrors>0?'bad':'ok'}">${recentErrors}</span></td><td>${recentErrors>0?'<a href="/admin#errors">view</a>':''}</td></tr>
+</table>
+<div class="meta">Generated ${new Date().toISOString()} · Server uptime ${Math.round(process.uptime())}s · Node ${process.version}</div>
+</body></html>`;
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
+});
+
+// ---------------------------------------------------------------------------
+// (17) One-time cleanup pass: walk every content_* row and re-sanitize stored
+// values so any Word garbage already in the DB is gone. Idempotent: the
+// "cleanup_done_v1" flag prevents repeat runs.
+// ---------------------------------------------------------------------------
+async function runOneTimeCleanup() {
+  if (!dbPool) return;
+  try {
+    const flag = await dbGetSetting('_cleanup_done_v1', '');
+    if (flag === '1') return;
+    const r = await dbQuery("SELECT key, value FROM site_settings WHERE key LIKE 'content_%'");
+    if (!r || !r.rows) return;
+    let touched = 0;
+    for (const row of r.rows) {
+      try {
+        const parsed = JSON.parse(row.value);
+        const cleaned = deepSanitizeContent(parsed);
+        const cleanedStr = JSON.stringify(cleaned);
+        if (cleanedStr !== row.value) {
+          await dbSetSetting(row.key, cleanedStr);
+          touched++;
+        }
+      } catch (e) {}
+    }
+    await dbSetSetting('_cleanup_done_v1', '1');
+    console.log('Content cleanup pass complete; rows touched:', touched);
+  } catch (e) { console.error('Cleanup error:', e.message); }
+}
+
 app.get('/services/:slug', async (req, res) => {
   try {
     const slug = req.params.slug;
@@ -3194,6 +3497,8 @@ async function initDatabase() {
     await dbQuery('DELETE FROM admin_sessions WHERE expires_at < NOW()');
     await dbQuery(`CREATE INDEX IF NOT EXISTS idx_page_views_created ON page_views(created_at)`);
     await dbQuery(`CREATE INDEX IF NOT EXISTS idx_page_views_page ON page_views(page)`);
+    await ensureAuxTables();
+    runOneTimeCleanup().catch(() => {});
     console.log('Database tables initialized');
   } catch (e) { console.error('DB init error:', e.message); }
 }

@@ -63,6 +63,72 @@
     bindLogout();
     renderPage('dashboard');
     startPresence();
+    setupAdminTelemetry();
+    checkPasswordRotation();
+  }
+
+  // (11) Capture uncaught JS errors and ship them to /admin/api/error-log so
+  // we see what's actually breaking in the admin UI without waiting for the
+  // admin to email screenshots.
+  function setupAdminTelemetry() {
+    if (window._cahitErrorHook) return;
+    window._cahitErrorHook = true;
+    function send(payload) {
+      try {
+        fetch('/admin/api/error-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          keepalive: true
+        }).catch(function() {});
+      } catch (e) {}
+    }
+    window.addEventListener('error', function(e) {
+      send({
+        level: 'error',
+        message: (e && e.message) || 'Unknown error',
+        url: (e && e.filename) || location.href,
+        line: (e && e.lineno) || 0,
+        col: (e && e.colno) || 0,
+        stack: (e && e.error && e.error.stack) ? String(e.error.stack).slice(0, 4000) : ''
+      });
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      var reason = e && e.reason;
+      send({
+        level: 'unhandledrejection',
+        message: (reason && reason.message) ? reason.message : String(reason || 'rejection'),
+        url: location.href,
+        line: 0, col: 0,
+        stack: (reason && reason.stack) ? String(reason.stack).slice(0, 4000) : ''
+      });
+    });
+  }
+
+  // (14) After /admin/api/verify reports the password is 90+ days old, show
+  // a sticky banner asking the admin to rotate.
+  function checkPasswordRotation() {
+    fetch('/admin/api/verify', { headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d || !d.success) return;
+        var dismissed = localStorage.getItem('cahit_pwd_banner_dismissed_v') || '';
+        var stamp = String(d.passwordChangedAt || '0');
+        if (dismissed === stamp) return;
+        if (d.passwordRotationDue) {
+          var bar = document.createElement('div');
+          bar.id = 'pwdRotationBar';
+          bar.style.cssText = 'position:sticky;top:0;z-index:200;background:#fef3c7;border-bottom:1px solid #fde68a;color:#92400e;padding:8px 16px;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600';
+          bar.innerHTML = '<span>Your admin password is ' + (d.passwordAgeDays || '90+') + ' days old. Rotate it from Settings &rarr; Account Security.</span>' +
+            '<button id="dismissPwdBar" style="background:transparent;border:1px solid #92400e;color:#92400e;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:12px">Remind me later</button>';
+          var main = document.querySelector('.main-content') || document.body;
+          main.insertBefore(bar, main.firstChild);
+          document.getElementById('dismissPwdBar').addEventListener('click', function() {
+            localStorage.setItem('cahit_pwd_banner_dismissed_v', stamp);
+            bar.remove();
+          });
+        }
+      }).catch(function() {});
   }
 
   function loadLeads() {
@@ -1355,13 +1421,19 @@
               '</div>' +
             '</div></div>';
         } else if (f.type === 'textarea') {
-          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + makeTranslateBtn(f.key) + '</label>' +
-            '<textarea class="form-textarea live-edit-field" data-key="' + f.key + '" data-selector="' + f.selector + '" data-testid="field-' + f.key + '">' + val + '</textarea></div>';
+          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + makeTranslateBtn(f.key) +
+              ' <button type="button" class="clean-field-btn" data-clean-key="' + f.key + '" title="Strip Word/MSO garbage and extra whitespace from this field" style="margin-left:6px;font-size:11px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:4px;padding:2px 8px;cursor:pointer">Clean</button>' +
+            '</label>' +
+            '<textarea class="form-textarea live-edit-field" data-key="' + f.key + '" data-selector="' + f.selector + '" data-testid="field-' + f.key + '">' + val + '</textarea>' +
+            '<div class="field-meta" data-meta-for="' + f.key + '" style="display:flex;justify-content:flex-end;font-size:11px;color:#64748b;margin-top:2px"><span class="char-count">' + (val || '').length + ' chars</span></div>' +
+          '</div>';
         } else if (f.type === 'richtext') {
           var rtHtml = (typeof rteInitialHtml === 'function') ? rteInitialHtml(val || '') : (val || '');
           var rtlAttr = f.rtl ? ' dir="rtl"' : '';
           var rtlStyle = f.rtl ? 'text-align:right;font-family:\'Noto Sans Arabic\',Arial,sans-serif;' : '';
-          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + makeTranslateBtn(f.key) + '</label>' +
+          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + makeTranslateBtn(f.key) +
+              ' <button type="button" class="clean-field-btn" data-clean-key="' + f.key + '" title="Strip Word/MSO garbage and extra whitespace from this field" style="margin-left:6px;font-size:11px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:4px;padding:2px 8px;cursor:pointer">Clean</button>' +
+            '</label>' +
             '<div class="rte-mini-toolbar" data-rte-target="rte-' + f.key + '" style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;background:#f1f5f9;border:1px solid #e2e8f0;border-bottom:none;border-radius:6px 6px 0 0;padding:4px">' +
               '<button type="button" class="rte-mini-btn" data-cmd="bold" title="Bold (select text first)" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer;font-weight:700;min-width:28px">B</button>' +
               '<button type="button" class="rte-mini-btn" data-cmd="italic" title="Italic (select text first)" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer;font-style:italic;min-width:28px">I</button>' +
@@ -1369,15 +1441,20 @@
               '<button type="button" class="rte-mini-btn" data-cmd="insertUnorderedList" title="Bulleted list (place cursor on a line)" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer">&bull; List</button>' +
               '<button type="button" class="rte-mini-btn" data-cmd="insertOrderedList" title="Numbered list (place cursor on a line)" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer">1. List</button>' +
               '<button type="button" class="rte-mini-btn" data-cmd="removeFormat" title="Clear formatting" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer">Clear</button>' +
-              '<span style="margin-left:auto;font-size:11px;color:#64748b;padding:0 6px">Tip: select text first, then click B / I / U</span>' +
+              '<span style="margin-left:auto;font-size:11px;color:#64748b;padding:0 6px">Tip: Ctrl+Shift+V pastes as plain text</span>' +
             '</div>' +
             '<div class="rte-editor rte-mini-editor live-edit-richtext" id="rte-' + f.key + '"' + rtlAttr + ' contenteditable="true" data-key="' + f.key + '" data-selector="' + f.selector + '" data-testid="field-' + f.key + '" style="min-height:120px;border:1px solid #e2e8f0;border-radius:0 0 6px 6px;padding:10px 12px;background:#fff;font-size:14px;line-height:1.6;outline:none;' + rtlStyle + '">' + rtHtml + '</div>' +
+            '<div class="field-meta" data-meta-for="' + f.key + '" style="display:flex;justify-content:flex-end;font-size:11px;color:#64748b;margin-top:2px"><span class="char-count">' + (rtHtml || '').replace(/<[^>]+>/g, '').length + ' chars</span></div>' +
           '</div>';
         } else {
           var rtlAttrIn = f.rtl ? ' dir="rtl"' : '';
           var rtlStyleIn = f.rtl ? ' style="text-align:right;font-family:\'Noto Sans Arabic\',Arial,sans-serif"' : '';
-          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + makeTranslateBtn(f.key) + '</label>' +
-            '<input class="form-input live-edit-field"' + rtlAttrIn + rtlStyleIn + ' data-key="' + f.key + '" data-selector="' + f.selector + '" value="' + val.replace(/"/g, '&quot;') + '" data-testid="field-' + f.key + '" /></div>';
+          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + makeTranslateBtn(f.key) +
+              ' <button type="button" class="clean-field-btn" data-clean-key="' + f.key + '" title="Strip Word/MSO garbage and extra whitespace from this field" style="margin-left:6px;font-size:11px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:4px;padding:2px 8px;cursor:pointer">Clean</button>' +
+            '</label>' +
+            '<input class="form-input live-edit-field"' + rtlAttrIn + rtlStyleIn + ' data-key="' + f.key + '" data-selector="' + f.selector + '" value="' + val.replace(/"/g, '&quot;') + '" data-testid="field-' + f.key + '" />' +
+            '<div class="field-meta" data-meta-for="' + f.key + '" style="display:flex;justify-content:flex-end;font-size:11px;color:#64748b;margin-top:2px"><span class="char-count">' + (val || '').length + ' chars</span></div>' +
+          '</div>';
         }
       });
     } else {
@@ -1407,6 +1484,10 @@
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>' +
           (state.funnelDisabled ? ' Funnel Off' : ' Funnel On') + '</button>' +
         '<button class="btn btn-outline" id="refreshPreviewBtn" data-testid="button-refresh-preview" title="Refresh Preview"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>' +
+        '<button class="btn btn-outline" id="translateAllBtn" data-testid="button-translate-all" title="Translate every EN field in this section to Arabic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></svg> Translate All</button>' +
+        '<button class="btn btn-outline" id="revisionsBtn" data-testid="button-revisions" title="View revision history for this section"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> History</button>' +
+        '<span id="unsavedBadge" style="display:none;align-self:center;font-size:11px;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:999px;padding:2px 8px;font-weight:600">Unsaved</span>' +
+        '<span id="autosaveBadge" style="display:none;align-self:center;font-size:11px;color:#166534;background:#dcfce7;border:1px solid #bbf7d0;border-radius:999px;padding:2px 8px;font-weight:600">Saved</span>' +
         '<button class="btn btn-primary" id="saveContentBtn" data-testid="button-save-content">' +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save</button>' +
       '</div>' +
@@ -1833,6 +1914,200 @@
         showToast('Media removed', 'success');
       });
     });
+
+    bindContentEditorExtras();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Editor extras: Clean-field button, character counts, Ctrl+Shift+V plain
+  // paste, Translate All, autosave + unsaved badge, History modal.
+  // ---------------------------------------------------------------------------
+  function localSanitize(raw) {
+    if (window.sanitizePastedHtml) return window.sanitizePastedHtml(String(raw || ''));
+    return String(raw || '');
+  }
+  function plainTextLength(htmlOrText) {
+    var s = String(htmlOrText || '');
+    if (/<[^>]+>/.test(s)) {
+      var tmp = document.createElement('div'); tmp.innerHTML = s;
+      return (tmp.textContent || tmp.innerText || '').length;
+    }
+    return s.length;
+  }
+  function updateCharCount(key) {
+    var meta = document.querySelector('[data-meta-for="' + key + '"] .char-count');
+    if (!meta) return;
+    var val = state.editedContent[key];
+    if (val === undefined || val === null) {
+      var f = document.querySelector('[data-key="' + key + '"]');
+      val = f ? (f.value !== undefined ? f.value : f.innerHTML) : '';
+    }
+    meta.textContent = plainTextLength(val) + ' chars';
+  }
+  function markUnsaved() {
+    state._dirty = true;
+    var u = document.getElementById('unsavedBadge');
+    var s = document.getElementById('autosaveBadge');
+    if (u) u.style.display = 'inline-block';
+    if (s) s.style.display = 'none';
+    scheduleAutosave();
+  }
+  function markSaved() {
+    state._dirty = false;
+    var u = document.getElementById('unsavedBadge');
+    var s = document.getElementById('autosaveBadge');
+    if (u) u.style.display = 'none';
+    if (s) { s.style.display = 'inline-block'; s.textContent = 'Saved ' + new Date().toLocaleTimeString(); }
+  }
+  function scheduleAutosave() {
+    if (state._autosaveTimer) clearTimeout(state._autosaveTimer);
+    state._autosaveTimer = setTimeout(function() {
+      var btn = document.getElementById('saveContentBtn');
+      if (btn && state._dirty && !btn.disabled) btn.click();
+    }, 4000);
+  }
+
+  function bindContentEditorExtras() {
+    // Char count live updates
+    document.querySelectorAll('.live-edit-field, .live-edit-richtext').forEach(function(el) {
+      var key = el.getAttribute('data-key');
+      if (!key) return;
+      var evt = el.classList.contains('live-edit-richtext') ? 'input' : 'input';
+      el.addEventListener(evt, function() { updateCharCount(key); markUnsaved(); });
+    });
+
+    // Clean-field button: re-sanitize current value and write it back.
+    document.querySelectorAll('.clean-field-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var key = btn.getAttribute('data-clean-key');
+        var rte = document.querySelector('.live-edit-richtext[data-key="' + key + '"]');
+        var ta  = document.querySelector('textarea.live-edit-field[data-key="' + key + '"]');
+        var ip  = document.querySelector('input.live-edit-field[data-key="' + key + '"]');
+        var before, after;
+        if (rte) {
+          before = rte.innerHTML;
+          after = localSanitize(before);
+          rte.innerHTML = after;
+          state.editedContent[key] = after;
+        } else if (ta) {
+          before = ta.value;
+          after = localSanitize(before).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/[ \t]{2,}/g, ' ').trim();
+          ta.value = after;
+          state.editedContent[key] = after;
+        } else if (ip) {
+          before = ip.value;
+          after = localSanitize(before).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
+          ip.value = after;
+          state.editedContent[key] = after;
+        } else { return; }
+        updateCharCount(key);
+        markUnsaved();
+        showToast('Cleaned ' + (before.length - after.length) + ' chars of junk', 'success');
+      });
+    });
+
+    // Ctrl+Shift+V: paste current clipboard as plain text into rich editor.
+    document.querySelectorAll('.live-edit-richtext').forEach(function(editor) {
+      editor.addEventListener('keydown', function(e) {
+        var isPasteShortcut = (e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'V' || e.key === 'v');
+        if (!isPasteShortcut) return;
+        if (!navigator.clipboard || !navigator.clipboard.readText) return;
+        e.preventDefault();
+        navigator.clipboard.readText().then(function(text) {
+          var html = (text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\r?\n/g,'<br>');
+          try { document.execCommand('insertHTML', false, html); }
+          catch (err) { editor.innerHTML += html; }
+          var ev; try { ev = new Event('input', { bubbles: true }); } catch (e2) { ev = document.createEvent('Event'); ev.initEvent('input', true, true); }
+          editor.dispatchEvent(ev);
+        }).catch(function() { showToast('Could not read clipboard — browser denied access', 'error'); });
+      });
+    });
+
+    // Translate-All: walk every EN field in the current section and POST it to
+    // /admin/api/translate, then write the result into the matching AR field.
+    var taBtn = document.getElementById('translateAllBtn');
+    if (taBtn) {
+      taBtn.addEventListener('click', function() {
+        var pairBtns = Array.prototype.slice.call(document.querySelectorAll('.ai-translate-pair-btn'));
+        if (!pairBtns.length) { showToast('No translatable fields in this section', 'error'); return; }
+        if (!confirm('Translate ' + pairBtns.length + ' field(s) to Arabic? This calls OpenAI and may take a moment.')) return;
+        taBtn.disabled = true;
+        var orig = taBtn.innerHTML;
+        var done = 0;
+        function next() {
+          if (done >= pairBtns.length) {
+            taBtn.disabled = false; taBtn.innerHTML = orig;
+            showToast('Translated ' + done + ' field(s) — review and Save', 'success');
+            return;
+          }
+          taBtn.innerHTML = 'Translating ' + (done + 1) + ' / ' + pairBtns.length + '...';
+          pairBtns[done].click();
+          done++;
+          // The per-field handler is async; give each ~2.5s to complete before firing the next.
+          setTimeout(next, 2500);
+        }
+        next();
+      });
+    }
+
+    // History modal
+    var histBtn = document.getElementById('revisionsBtn');
+    if (histBtn) {
+      histBtn.addEventListener('click', function() {
+        var section = state.editingSection || 'hero';
+        var isDetail = (section === 'project-detail' || section === 'service-detail');
+        var key = isDetail ? section + '-' + (state.detailSlug || '') : section;
+        fetch('/admin/api/site-content/' + key + '/revisions', { headers: authHeaders() })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (!d.success || !d.revisions || !d.revisions.length) { showToast('No revision history yet for this section', 'error'); return; }
+            var rows = d.revisions.map(function(r) {
+              var when = new Date(r.created_at).toLocaleString();
+              return '<tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">' + when + '</td>' +
+                '<td style="padding:8px;border-bottom:1px solid #e2e8f0">' + (r.saved_by || 'admin') + '</td>' +
+                '<td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">' +
+                  '<button class="btn btn-outline" data-restore-id="' + r.id + '" style="font-size:12px;padding:4px 10px">Restore</button></td></tr>';
+            }).join('');
+            var modal = document.createElement('div');
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+            modal.innerHTML = '<div style="background:#fff;max-width:560px;width:100%;border-radius:10px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.25)">' +
+              '<div style="padding:14px 18px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center"><strong>Revision history — ' + key + '</strong><button class="rev-close" style="background:none;border:0;font-size:20px;cursor:pointer">&times;</button></div>' +
+              '<table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:8px;background:#f8fafc;border-bottom:1px solid #e2e8f0">When</th><th style="text-align:left;padding:8px;background:#f8fafc;border-bottom:1px solid #e2e8f0">By</th><th style="padding:8px;background:#f8fafc;border-bottom:1px solid #e2e8f0"></th></tr></thead><tbody>' + rows + '</tbody></table>' +
+              '<div style="padding:10px 18px;font-size:12px;color:#64748b">Showing up to 20 most recent saves. Restoring also creates a new revision so nothing is lost.</div>' +
+            '</div>';
+            document.body.appendChild(modal);
+            modal.querySelector('.rev-close').addEventListener('click', function() { document.body.removeChild(modal); });
+            modal.addEventListener('click', function(e) { if (e.target === modal) document.body.removeChild(modal); });
+            modal.querySelectorAll('[data-restore-id]').forEach(function(b) {
+              b.addEventListener('click', function() {
+                var revId = b.getAttribute('data-restore-id');
+                if (!confirm('Restore this revision? Your current unsaved changes will be lost.')) return;
+                fetch('/admin/api/site-content/' + key + '/restore/' + revId, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: '{}' })
+                  .then(function(r) { return r.json(); })
+                  .then(function(rr) {
+                    if (rr.success) {
+                      showToast('Revision restored — reloading editor', 'success');
+                      document.body.removeChild(modal);
+                      state.editedContent = {};
+                      renderPage('content'); bindEditorActions();
+                    } else { showToast('Restore failed', 'error'); }
+                  });
+              });
+            });
+          });
+      });
+    }
+
+    // Hook into Save button so we can flip the badges.
+    var saveBtnX = document.getElementById('saveContentBtn');
+    if (saveBtnX && !saveBtnX._badgeHook) {
+      saveBtnX._badgeHook = true;
+      saveBtnX.addEventListener('click', function() {
+        // Optimistic: after a short delay assume save handler ran fine. The
+        // real fetch callback will overwrite this if it failed.
+        setTimeout(function() { if (!state._saveFailed) markSaved(); state._saveFailed = false; }, 1500);
+      }, true);
+    }
   }
 
   function uploadFile(file, key, selector, attr) {

@@ -1592,6 +1592,7 @@
 
     document.querySelectorAll('.live-edit-richtext').forEach(function(editor) {
       editor.addEventListener('paste', function(e) {
+        if (this._quill) return;  // Quill handles paste sanitization itself.
         if (!e.clipboardData) return;
         var html = e.clipboardData.getData('text/html');
         var text = e.clipboardData.getData('text/plain');
@@ -1616,6 +1617,7 @@
         this.dispatchEvent(ev);
       });
       editor.addEventListener('input', function() {
+        if (this._quill) return;  // Quill emits text-change instead.
         var key = this.getAttribute('data-key');
         var selector = this.getAttribute('data-selector');
         var value = this.innerHTML;
@@ -1623,6 +1625,7 @@
         updatePreviewElement(selector, value, key);
       });
       editor.addEventListener('blur', function() {
+        if (this._quill) return;
         var key = this.getAttribute('data-key');
         state.editedContent[key] = this.innerHTML;
       });
@@ -1640,7 +1643,7 @@
         if (!sourceKey || !targetKey) return;
         function readField(key) {
           var rte = document.querySelector('.live-edit-richtext[data-key="' + key + '"]');
-          if (rte) return { kind: 'richtext', el: rte, value: rte.innerHTML };
+          if (rte) return { kind: 'richtext', el: rte, value: rte._quill ? rte._quill.root.innerHTML : rte.innerHTML };
           var ta = document.querySelector('textarea.live-edit-field[data-key="' + key + '"]');
           if (ta) return { kind: 'textarea', el: ta, value: ta.value };
           var inp = document.querySelector('input.live-edit-field[data-key="' + key + '"]');
@@ -1673,7 +1676,11 @@
           }
           var translated = data.translated || '';
           if (target.kind === 'richtext') {
-            target.el.innerHTML = translated;
+            if (target.el._quill) {
+              target.el._quill.root.innerHTML = translated;
+            } else {
+              target.el.innerHTML = translated;
+            }
           } else {
             target.el.value = translated;
           }
@@ -1716,6 +1723,29 @@
         var targetId = toolbar && toolbar.getAttribute('data-rte-target');
         var editor = targetId && document.getElementById(targetId);
         if (!editor) return;
+        var cmd = this.getAttribute('data-cmd');
+        var key = editor.getAttribute('data-key');
+        var selector = editor.getAttribute('data-selector');
+        // Quill path: use the Quill API so formatting survives the editor's
+        // internal sanitizer instead of being stripped.
+        if (editor._quill) {
+          var q = editor._quill;
+          var range = q.getSelection(true);
+          if (cmd === 'bold' || cmd === 'italic' || cmd === 'underline') {
+            var cur = range && range.length ? q.getFormat(range)[cmd] : false;
+            q.format(cmd, !cur);
+          } else if (cmd === 'insertUnorderedList') {
+            q.format('list', q.getFormat(range || {}).list === 'bullet' ? false : 'bullet');
+          } else if (cmd === 'insertOrderedList') {
+            q.format('list', q.getFormat(range || {}).list === 'ordered' ? false : 'ordered');
+          } else if (cmd === 'removeFormat') {
+            if (range && range.length) q.removeFormat(range.index, range.length);
+          }
+          var html = q.root.innerHTML;
+          state.editedContent[key] = html;
+          updatePreviewElement(selector, html, key);
+          return;
+        }
         editor.focus();
         // Restore previously saved selection so the command applies to the right text
         if (editor._savedRange) {
@@ -1723,7 +1753,6 @@
           sel.removeAllRanges();
           sel.addRange(editor._savedRange);
         }
-        var cmd = this.getAttribute('data-cmd');
         var ok = false;
         try { ok = document.execCommand(cmd, false, null); } catch(err) {}
         // Manual fallback for B/I/U if execCommand returned false (rare in modern browsers)
@@ -1748,8 +1777,6 @@
         // Re-save selection
         var sel3 = window.getSelection();
         if (sel3 && sel3.rangeCount > 0) editor._savedRange = sel3.getRangeAt(0).cloneRange();
-        var key = editor.getAttribute('data-key');
-        var selector = editor.getAttribute('data-selector');
         state.editedContent[key] = editor.innerHTML;
         updatePreviewElement(selector, editor.innerHTML, key);
       });
@@ -1934,13 +1961,24 @@
     }
     return s.length;
   }
+  function richtextHTML(el) {
+    if (!el) return '';
+    if (el._quill) return el._quill.root.innerHTML;
+    return el.innerHTML;
+  }
+  function setRichtextHTML(el, html) {
+    if (!el) return;
+    if (el._quill) { el._quill.root.innerHTML = html; }
+    else { el.innerHTML = html; }
+  }
   function updateCharCount(key) {
     var meta = document.querySelector('[data-meta-for="' + key + '"] .char-count');
     if (!meta) return;
     var val = state.editedContent[key];
     if (val === undefined || val === null) {
       var f = document.querySelector('[data-key="' + key + '"]');
-      val = f ? (f.value !== undefined ? f.value : f.innerHTML) : '';
+      if (f && f.classList && f.classList.contains('live-edit-richtext')) val = richtextHTML(f);
+      else val = f ? (f.value !== undefined ? f.value : f.innerHTML) : '';
     }
     meta.textContent = plainTextLength(val) + ' chars';
   }
@@ -1968,10 +2006,51 @@
   }
 
   function bindContentEditorExtras() {
+    // Upgrade every rich-text field to a Quill editor. Quill gives us reliable
+    // paste sanitization (strips Word/MSO junk for free), keyboard handling,
+    // and a clean HTML model — without any build step. The existing toolbar
+    // buttons keep working because they detect el._quill and route through
+    // quill.format() instead of execCommand.
+    if (typeof Quill !== 'undefined') {
+      document.querySelectorAll('.live-edit-richtext').forEach(function(el) {
+        if (el._quill || el.classList.contains('ql-container')) return;
+        var key = el.getAttribute('data-key');
+        var selector = el.getAttribute('data-selector');
+        var isRTL = (el.getAttribute('dir') === 'rtl') || (el.style && el.style.direction === 'rtl');
+        var initial = el.innerHTML;
+        try { el.innerHTML = ''; } catch(_) {}
+        var quill;
+        try {
+          quill = new Quill(el, {
+            theme: 'snow',
+            modules: { toolbar: false, clipboard: { matchVisual: false } },
+            formats: ['bold','italic','underline','strike','list','link','header','blockquote']
+          });
+        } catch(initErr) {
+          el.innerHTML = initial;  // Restore on failure so editing still works.
+          return;
+        }
+        quill.root.innerHTML = initial;
+        if (isRTL) { quill.root.setAttribute('dir', 'rtl'); quill.format('direction', 'rtl'); }
+        el._quill = quill;
+        quill.on('text-change', function() {
+          var html = quill.root.innerHTML;
+          // Quill emits "<p><br></p>" for empty content — normalize so we don't
+          // ship visible placeholder paragraphs to the live site.
+          if (html === '<p><br></p>') html = '';
+          state.editedContent[key] = html;
+          if (selector) updatePreviewElement(selector, html, key);
+          updateCharCount(key);
+          markUnsaved();
+        });
+      });
+    }
+
     // Char count live updates
     document.querySelectorAll('.live-edit-field, .live-edit-richtext').forEach(function(el) {
       var key = el.getAttribute('data-key');
       if (!key) return;
+      if (el._quill) return;  // Quill text-change already handles char count + dirty.
       var evt = el.classList.contains('live-edit-richtext') ? 'input' : 'input';
       el.addEventListener(evt, function() { updateCharCount(key); markUnsaved(); });
     });
@@ -1985,9 +2064,9 @@
         var ip  = document.querySelector('input.live-edit-field[data-key="' + key + '"]');
         var before, after;
         if (rte) {
-          before = rte.innerHTML;
+          before = richtextHTML(rte);
           after = localSanitize(before);
-          rte.innerHTML = after;
+          setRichtextHTML(rte, after);
           state.editedContent[key] = after;
         } else if (ta) {
           before = ta.value;

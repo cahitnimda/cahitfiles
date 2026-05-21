@@ -17,6 +17,19 @@ if (defined('ABSPATH')) {
   <title>Cahit CRM Admin</title>
   <link rel="stylesheet" href="/admin/admin.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- Quill WYSIWYG editor (used for all rich-text fields). Loaded from CDN so
+       there is no build step. The "snow" theme stylesheet is included so the
+       toolbar (which we hide) and active styles render correctly anyway. -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" />
+  <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js" defer></script>
+  <style>
+    /* Hide Quill's own toolbar — we use our existing rte-mini-toolbar instead. */
+    .live-edit-richtext .ql-toolbar { display: none; }
+    .live-edit-richtext { padding: 0 !important; }
+    .live-edit-richtext .ql-editor { min-height: 120px; padding: 10px 12px; font-size: 14px; line-height: 1.6; border-radius: 0 0 6px 6px; }
+    .live-edit-richtext .ql-editor[dir="rtl"] { text-align: right; font-family: 'Noto Sans Arabic', Arial, sans-serif; }
+    .live-edit-richtext .ql-editor.ql-blank::before { color: #94a3b8; font-style: normal; }
+  </style>
 </head>
 <body>
   <div class="admin-layout">

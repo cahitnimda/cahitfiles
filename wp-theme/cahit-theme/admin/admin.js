@@ -1478,7 +1478,62 @@
       });
     });
 
+    // Strip Microsoft Word / Outlook paste garbage (the same junk the server
+    // strips on render): MSO conditional blocks, <o:p>/<w:*>/<v:*>/<m:*>
+    // namespaced tags, inline <style>, mso-* styles, MsoNormal classes,
+    // empty spans, <font> tags. Keeps real content + basic formatting.
+    function sanitizePastedHtml(raw) {
+      if (!raw) return '';
+      var s = String(raw);
+      s = s.replace(/<!--\[if[\s\S]*?\[endif\]-->/gi, '');
+      s = s.replace(/<!\[if[\s\S]*?\[endif\]>/gi, '');
+      s = s.replace(/<!\[endif\]>/gi, '');
+      s = s.replace(/<!\[if[^\]]*\]>/gi, '');
+      s = s.replace(/<\?xml[\s\S]*?\?>/gi, '');
+      s = s.replace(/<xml[\s\S]*?<\/xml>/gi, '');
+      s = s.replace(/<(o|w|v|m|st1):[^>]*>/gi, '');
+      s = s.replace(/<\/(o|w|v|m|st1):[^>]*>/gi, '');
+      s = s.replace(/<style[\s\S]*?<\/style>/gi, '');
+      s = s.replace(/<meta[^>]*>/gi, '');
+      s = s.replace(/<link[^>]*>/gi, '');
+      s = s.replace(/<title[\s\S]*?<\/title>/gi, '');
+      s = s.replace(/<!--[\s\S]*?-->/g, '');
+      s = s.replace(/\sclass="?Mso[^"\s>]*"?/gi, '');
+      s = s.replace(/\s(lang|xml:lang)="[^"]*"/gi, '');
+      s = s.replace(/\sstyle="[^"]*mso-[^"]*"/gi, '');
+      s = s.replace(/<(\/?)font[^>]*>/gi, '');
+      s = s.replace(/<span[^>]*>(\s|&nbsp;)*<\/span>/gi, '');
+      s = s.replace(/<p[^>]*>\s*<\/p>/gi, '');
+      s = s.replace(/(\s|&nbsp;){3,}/g, ' ');
+      return s.trim();
+    }
+    window.sanitizePastedHtml = sanitizePastedHtml;
+
     document.querySelectorAll('.live-edit-richtext').forEach(function(editor) {
+      editor.addEventListener('paste', function(e) {
+        if (!e.clipboardData) return;
+        var html = e.clipboardData.getData('text/html');
+        var text = e.clipboardData.getData('text/plain');
+        // If clipboard has HTML, clean it. Otherwise insert plain text as-is.
+        var insert;
+        if (html && /<\w+/.test(html)) {
+          insert = sanitizePastedHtml(html);
+        } else {
+          insert = (text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\r?\n/g,'<br>');
+        }
+        if (!insert) return;
+        e.preventDefault();
+        try {
+          document.execCommand('insertHTML', false, insert);
+        } catch (err) {
+          // Fallback: append
+          this.innerHTML += insert;
+        }
+        // Trigger input handler manually
+        var ev;
+        try { ev = new Event('input', { bubbles: true }); } catch (e2) { ev = document.createEvent('Event'); ev.initEvent('input', true, true); }
+        this.dispatchEvent(ev);
+      });
       editor.addEventListener('input', function() {
         var key = this.getAttribute('data-key');
         var selector = this.getAttribute('data-selector');

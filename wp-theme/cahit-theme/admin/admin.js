@@ -133,7 +133,19 @@
 
   function loadLeads() {
     fetch('/admin/api/leads', { headers: authHeaders() }).then(function(r) { return r.json(); }).then(function(data) {
-      if (data.success) { state.leads = data.data; if (state.currentPage === 'dashboard' || state.currentPage === 'leads') renderPage(state.currentPage); }
+      if (!data.success) return;
+      state.leads = data.data;
+      if (state.currentPage === 'leads') {
+        renderPage('leads');
+      } else if (state.currentPage === 'dashboard') {
+        // Update only the two stat numbers in-place so the dashboard doesn't
+        // flash/re-render just because leads loaded asynchronously.
+        var totalEl  = document.querySelector('[data-testid="stat-leads"] .stat-card-value');
+        var newEl    = document.querySelector('[data-testid="stat-leads"] .stat-card-change');
+        var newCount = state.leads.filter(function(l) { return l.status === 'new'; }).length;
+        if (totalEl) totalEl.textContent = state.leads.length;
+        if (newEl)   newEl.textContent   = newCount + ' new';
+      }
     }).catch(function() {});
   }
 
@@ -433,7 +445,7 @@
     var txt = document.getElementById('livePresenceText');
     var dd = document.getElementById('livePresenceDropdown');
     if (!pill || !txt || !dd) return;
-    pill.style.display = 'inline-flex';
+    pill.style.visibility = 'visible';  // reveal without shifting layout (starts as visibility:hidden)
     var n = others ? others.length : 0;
     if (presence.followingSid) {
       var lead = (others || []).filter(function(o) { return o.sid === presence.followingSid; })[0];
@@ -489,7 +501,9 @@
       });
       rows += '<div style="padding:8px 4px 2px;color:#64748b;font-size:11px;line-height:1.4">Click <strong>Follow</strong> to mirror that admin\'s screen — your panel will auto-navigate to whatever page or section they are on.</div>';
     }
-    dd.innerHTML = rows;
+    // Only rebuild the dropdown HTML when it's open — hidden repaints every 8s
+    // are wasted work and can cause compositing jank on some browsers.
+    if (dd.style.display !== 'none') dd.innerHTML = rows;
     // Wire up the Follow / Stop / Switch buttons. We delegate on the dropdown
     // so dynamic re-renders keep working without stacking listeners.
     if (!dd._followBound) {
@@ -578,7 +592,7 @@
   function startPresence() {
     if (presence.timer) return;
     presenceHeartbeat();
-    presence.timer = setInterval(presenceHeartbeat, 3000);
+    presence.timer = setInterval(presenceHeartbeat, 8000);
     window.addEventListener('beforeunload', function() {
       try {
         var token = getAdminToken();

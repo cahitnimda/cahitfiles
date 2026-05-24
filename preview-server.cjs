@@ -3503,12 +3503,178 @@ async function initDatabase() {
   } catch (e) { console.error('DB init error:', e.message); }
 }
 
+// ---------------------------------------------------------------------------
+// Self-monitoring: runs every 5 minutes, emails cosstech@gmail.com the moment
+// something breaks, and again when it recovers. One alert per incident — no spam.
+// ---------------------------------------------------------------------------
+const ALERT_EMAILS = ['cosstech@gmail.com'];
+const MONITOR_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+// Track which checks are currently failing so we only alert on state changes.
+const _monitorState = {}; // checkName -> { failing: bool, alertedAt: Date|null }
+
+async function runMonitorChecks() {
+  const results = [];
+
+  // 1. Database reachable
+  let dbOk = false;
+  let dbDetail = 'unavailable';
+  if (dbPool) {
+    try {
+      const t0 = Date.now();
+      await dbQuery('SELECT 1');
+      dbOk = true;
+      dbDetail = (Date.now() - t0) + 'ms';
+    } catch (e) { dbDetail = e.message.slice(0, 80); }
+  }
+  results.push({ name: 'Database', ok: dbOk, detail: dbDetail });
+
+  // 2. Login endpoint responds
+  let loginOk = false;
+  let loginDetail = 'no response';
+  try {
+    const r = await fetch(`http://127.0.0.1:${PORT}/admin/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: '__monitor__', password: '__monitor__' }),
+      signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined
+    });
+    // 401 = server is up and login logic ran (wrong creds expected)
+    loginOk = r.status === 401 || r.status === 200;
+    loginDetail = 'HTTP ' + r.status;
+  } catch (e) { loginDetail = e.message.slice(0, 80); }
+  results.push({ name: 'Login endpoint', ok: loginOk, detail: loginDetail });
+
+  // 3. Leads API responds
+  let leadsOk = false;
+  let leadsDetail = 'no response';
+  try {
+    const r = await fetch(`http://127.0.0.1:${PORT}/admin/api/leads`, {
+      headers: { 'Authorization': 'Bearer __monitor__' },
+      signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined
+    });
+    leadsOk = r.status === 401 || r.status === 200;
+    leadsDetail = 'HTTP ' + r.status;
+  } catch (e) { leadsDetail = e.message.slice(0, 80); }
+  results.push({ name: 'Leads API', ok: leadsOk, detail: leadsDetail });
+
+  // 4. Site front page loads
+  let siteOk = false;
+  let siteDetail = 'no response';
+  try {
+    const r = await fetch(`http://127.0.0.1:${PORT}/`, {
+      signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined
+    });
+    siteOk = r.status === 200;
+    siteDetail = 'HTTP ' + r.status;
+  } catch (e) { siteDetail = e.message.slice(0, 80); }
+  results.push({ name: 'Site front page', ok: siteOk, detail: siteDetail });
+
+  return results;
+}
+
+async function sendAlertEmail(subject, bodyHtml, bodyText) {
+  try {
+    const { getResendClient } = require('./server/resendClient.cjs');
+    const { client, fromEmail } = await getResendClient();
+    const from = fromEmail || 'Cahit Monitor <onboarding@resend.dev>';
+    await client.emails.send({
+      from,
+      to: ALERT_EMAILS,
+      subject,
+      text: bodyText,
+      html: bodyHtml
+    });
+    console.log('[monitor] alert sent:', subject);
+  } catch (e) {
+    console.error('[monitor] failed to send alert email:', e.message);
+  }
+}
+
+async function runMonitor() {
+  try {
+    const checks = await runMonitorChecks();
+    const now = new Date();
+
+    for (const check of checks) {
+      const prev = _monitorState[check.name] || { failing: false, alertedAt: null };
+
+      if (!check.ok && !prev.failing) {
+        // Newly broken — alert immediately
+        _monitorState[check.name] = { failing: true, alertedAt: now };
+        const subject = `🚨 Cahit CRM ALERT: ${check.name} is DOWN`;
+        const bodyText = [
+          `ALERT: ${check.name} failed on the Cahit Contracting server.`,
+          `Detail: ${check.detail}`,
+          `Time: ${now.toISOString()}`,
+          ``,
+          `Check the admin panel: https://cahitcontracting.com/admin`,
+          `Health page: https://cahitcontracting.com/admin/health`
+        ].join('\n');
+        const bodyHtml = `
+<div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#0f172a">
+  <div style="background:#991b1b;color:#fff;padding:18px 22px;border-radius:10px 10px 0 0;font-size:18px;font-weight:700">
+    🚨 Cahit CRM Alert
+  </div>
+  <div style="border:1px solid #fca5a5;border-top:0;border-radius:0 0 10px 10px;padding:22px;background:#fff">
+    <p style="margin:0 0 12px;font-size:16px;font-weight:600;color:#991b1b">${check.name} is DOWN</p>
+    <p style="margin:0 0 10px"><strong>Detail:</strong> ${check.detail}</p>
+    <p style="margin:0 0 10px"><strong>Detected at:</strong> ${now.toISOString()}</p>
+    <hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0">
+    <p style="margin:0 0 10px">
+      <a href="https://cahitcontracting.com/admin/health" style="display:inline-block;background:#0ea5e9;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">View Health Page</a>
+    </p>
+    <p style="margin:0;font-size:12px;color:#64748b">This alert was sent automatically by the Cahit CRM self-monitor.</p>
+  </div>
+</div>`;
+        await sendAlertEmail(subject, bodyHtml, bodyText);
+
+      } else if (check.ok && prev.failing) {
+        // Recovered — send recovery notice
+        _monitorState[check.name] = { failing: false, alertedAt: now };
+        const downSince = prev.alertedAt ? ` (was down since ${prev.alertedAt.toISOString()})` : '';
+        const subject = `✅ Cahit CRM RECOVERED: ${check.name} is back up`;
+        const bodyText = [
+          `RECOVERED: ${check.name} is working again on the Cahit Contracting server.`,
+          `Detail: ${check.detail}${downSince}`,
+          `Time: ${now.toISOString()}`
+        ].join('\n');
+        const bodyHtml = `
+<div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#0f172a">
+  <div style="background:#166534;color:#fff;padding:18px 22px;border-radius:10px 10px 0 0;font-size:18px;font-weight:700">
+    ✅ Cahit CRM Recovered
+  </div>
+  <div style="border:1px solid #86efac;border-top:0;border-radius:0 0 10px 10px;padding:22px;background:#fff">
+    <p style="margin:0 0 12px;font-size:16px;font-weight:600;color:#166534">${check.name} is back up</p>
+    <p style="margin:0 0 10px"><strong>Detail:</strong> ${check.detail}</p>
+    <p style="margin:0 0 10px"><strong>Recovered at:</strong> ${now.toISOString()}${downSince}</p>
+    <p style="margin:0;font-size:12px;color:#64748b">This alert was sent automatically by the Cahit CRM self-monitor.</p>
+  </div>
+</div>`;
+        await sendAlertEmail(subject, bodyHtml, bodyText);
+
+      } else {
+        // No state change — just update record
+        _monitorState[check.name] = { failing: !check.ok, alertedAt: prev.alertedAt };
+      }
+    }
+  } catch (e) {
+    console.error('[monitor] runMonitor error:', e.message);
+  }
+}
+
 if (!process.env.VERCEL) {
   initDatabase().then(() => {
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`WordPress theme preview server running on http://0.0.0.0:${PORT}`);
       console.log(`Theme dir: ${THEME_DIR}`);
       console.log(`Database: ${dbPool ? 'PostgreSQL connected' : 'File-based fallback'}`);
+      // Start monitor after 30s to let DB and routes fully initialize
+      setTimeout(() => {
+        runMonitor();
+        setInterval(runMonitor, MONITOR_INTERVAL_MS);
+        console.log('[monitor] self-monitor started — checking every 5 minutes, alerts → ' + ALERT_EMAILS.join(', '));
+      }, 30000);
     });
   });
 } else {

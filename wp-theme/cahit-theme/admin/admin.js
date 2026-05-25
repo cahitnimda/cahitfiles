@@ -203,8 +203,14 @@
               else if (field.classList && field.classList.contains('live-edit-richtext')) {
                 // Push value into Quill if upgraded, else into the
                 // contenteditable directly.
-                if (field._quill) { field._quill.root.innerHTML = data[key] || ''; }
-                else { field.innerHTML = data[key] || ''; }
+                // _quillLoading suppresses the text-change → markUnsaved() cycle
+                // that would otherwise trigger an unwanted autosave on every
+                // section switch.
+                if (field._quill) {
+                  field._quillLoading = true;
+                  field._quill.root.innerHTML = data[key] || '';
+                  setTimeout(function(f){ f._quillLoading = false; }, 0, field);
+                } else { field.innerHTML = data[key] || ''; }
               }
             }
           }
@@ -2229,10 +2235,16 @@
           el.innerHTML = initial;  // Restore on failure so editing still works.
           return;
         }
+        // Suppress text-change during programmatic init so Quill's
+        // MutationObserver doesn't immediately fire markUnsaved().
+        el._quillLoading = true;
         quill.root.innerHTML = initial;
         if (isRTL) { quill.root.setAttribute('dir', 'rtl'); quill.format('direction', 'rtl'); }
         el._quill = quill;
+        setTimeout(function() { el._quillLoading = false; }, 0);
         quill.on('text-change', function() {
+          // Ignore events fired by programmatic innerHTML changes (init / DB load).
+          if (el._quillLoading) return;
           var html = quill.root.innerHTML;
           // Quill emits "<p><br></p>" for empty content — normalize so we don't
           // ship visible placeholder paragraphs to the live site.

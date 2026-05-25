@@ -336,11 +336,11 @@
           if (result && result.success && result.data) {
             Object.keys(result.data).forEach(function(k) { state.editedContent[k] = result.data[k]; });
           }
-          renderPage('content');
-          bindEditorActions();
+          var fb = document.getElementById('editorFieldsBody');
+          if (fb) { fb.innerHTML = buildSectionFieldsHtml(state.editingSection, state.detailSlug); if (typeof bindContentEditorExtras === 'function') bindContentEditorExtras(); }
         }).catch(function() {
-          renderPage('content');
-          bindEditorActions();
+          var fb = document.getElementById('editorFieldsBody');
+          if (fb) { fb.innerHTML = buildSectionFieldsHtml(state.editingSection, state.detailSlug); if (typeof bindContentEditorExtras === 'function') bindContentEditorExtras(); }
         });
     } else {
       renderPage(page);
@@ -548,8 +548,8 @@
       .then(function(result) {
         if (!result || !result.success || !result.data) return;
         Object.keys(result.data).forEach(function(k) { state.editedContent[k] = result.data[k]; });
-        renderPage('content');
-        bindEditorActions();
+        var fb = document.getElementById('editorFieldsBody');
+        if (fb) { fb.innerHTML = buildSectionFieldsHtml(state.editingSection, state.detailSlug); if (typeof bindContentEditorExtras === 'function') bindContentEditorExtras(); }
         if (typeof showToast === 'function') {
           showToast(ev.by + ' just saved this section — your editor was refreshed.', 'success');
         }
@@ -1538,25 +1538,207 @@
       '</div>';
   }
 
+  // Build only the fields-panel HTML for a given section+slug without touching
+  // the rest of the editor layout or the preview iframe.
+  function buildSectionFieldsHtml(section, detailSlug) {
+    var isDetailSection = (section === 'project-detail' || section === 'service-detail');
+    var detailSlugs = [];
+    if (section === 'project-detail') {
+      detailSlugs = [
+        { slug: 'seaport-infrastructure', label: 'Seaport Infrastructure' },
+        { slug: 'coastal-protection', label: 'Coastal Protection Systems' },
+        { slug: 'road-infrastructure', label: 'Road Infrastructure Development' },
+        { slug: 'asphalt-paving', label: 'Asphalt Paving Works' },
+        { slug: 'pipe-installation', label: 'Underground Pipe Installation' },
+        { slug: 'concrete-formwork', label: 'Concrete Formwork' }
+      ];
+    } else if (section === 'service-detail') {
+      detailSlugs = [
+        { slug: 'marine-coastal-construction', label: 'Marine & Coastal Construction' },
+        { slug: 'infrastructure-development', label: 'Infrastructure Development' },
+        { slug: 'earthworks', label: 'Earthworks' },
+        { slug: 'dewatering-shoring', label: 'Dewatering & Shoring' },
+        { slug: 'mep-works', label: 'MEP Works' },
+        { slug: 'general-construction', label: 'General Construction' }
+      ];
+    }
+    var currentDetailSlug = detailSlug || (detailSlugs.length ? detailSlugs[0].slug : '');
+    var fields = sectionFields[section] || [];
+    var fieldsHtml = '';
+    if (isDetailSection) {
+      fieldsHtml += '<div class="form-group" style="margin-bottom:16px;padding-bottom:16px;border-bottom:2px solid #e2e8f0">' +
+        '<label class="form-label" style="font-weight:700;color:#0A3D6B">Select ' + (section === 'project-detail' ? 'Project' : 'Service') + ' to Edit</label>' +
+        '<select class="form-input" id="detailSlugSelector" data-testid="select-detail-slug" style="font-weight:600">' +
+          detailSlugs.map(function(d) {
+            return '<option value="' + d.slug + '"' + (d.slug === currentDetailSlug ? ' selected' : '') + '>' + d.label + '</option>';
+          }).join('') +
+        '</select>' +
+        '<p style="font-size:12px;color:#64748b;margin-top:4px">This content appears on the detail page: <strong>/' + (section === 'project-detail' ? 'projects' : 'services') + '/' + currentDetailSlug + '</strong></p>' +
+      '</div>';
+    }
+    var arPairKeys = {};
+    fields.forEach(function(ff) { arPairKeys[ff.key] = true; });
+    function makeTranslateBtnLocal(enKey) {
+      var arKey = enKey + '-ar';
+      if (!arPairKeys[arKey]) return '';
+      return '<button type="button" class="ai-translate-pair-btn" data-source-key="' + enKey + '" data-target-key="' + arKey + '" data-testid="button-translate-' + enKey + '" ' +
+        'style="margin-left:8px;background:#f59e0b;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:4px" ' +
+        'title="Translate the text in this field to Arabic and place it in the matching Arabic field below">' +
+        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></svg>' +
+        'Translate → Arabic</button>';
+    }
+    if (fields.length > 0) {
+      fields.forEach(function(f) {
+        var rawVal = state.editedContent[f.key];
+        if (rawVal === undefined || rawVal === null) rawVal = f.defaultVal;
+        var val = (rawVal === undefined || rawVal === null) ? '' : String(rawVal);
+        if (f.type === 'image') {
+          var previewSrc = val || '';
+          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + '</label>' +
+            '<div class="media-upload-field" data-testid="upload-' + f.key + '">' +
+              (previewSrc ? '<div class="upload-preview"><img src="' + previewSrc + '" class="upload-preview-img" /><button class="upload-remove-btn" data-key="' + f.key + '" data-selector="' + f.selector + '" title="Remove">&times;</button></div>' : '') +
+              '<div class="upload-drop-area" data-key="' + f.key + '" data-selector="' + f.selector + '" data-attr="' + (f.attr || 'src') + '" data-accept="image/*">' +
+                '<input type="file" class="upload-file-input" accept="image/*" data-key="' + f.key + '" data-selector="' + f.selector + '" data-attr="' + (f.attr || 'src') + '" data-testid="input-upload-' + f.key + '" />' +
+                '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' +
+                '<span>Click to upload or drag image</span>' +
+              '</div>' +
+            '</div></div>';
+        } else if (f.type === 'video') {
+          var videoSrc = val || '';
+          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + '</label>' +
+            '<div class="media-upload-field" data-testid="upload-' + f.key + '">' +
+              (videoSrc ? '<div class="upload-preview"><video src="' + videoSrc + '" class="upload-preview-video" muted></video><button class="upload-remove-btn" data-key="' + f.key + '" data-selector="' + f.selector + '" title="Remove">&times;</button></div>' : '') +
+              '<div class="upload-drop-area" data-key="' + f.key + '" data-selector="' + f.selector + '" data-attr="' + (f.attr || 'src') + '" data-accept="video/*">' +
+                '<input type="file" class="upload-file-input" accept="video/*" data-key="' + f.key + '" data-selector="' + f.selector + '" data-attr="' + (f.attr || 'src') + '" data-testid="input-upload-' + f.key + '" />' +
+                '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>' +
+                '<span>Click to upload or drag video</span>' +
+              '</div>' +
+            '</div></div>';
+        } else if (f.type === 'textarea') {
+          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + makeTranslateBtnLocal(f.key) +
+              ' <button type="button" class="clean-field-btn" data-clean-key="' + f.key + '" title="Strip Word/MSO garbage" style="margin-left:6px;font-size:11px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:4px;padding:2px 8px;cursor:pointer">Clean</button>' +
+            '</label>' +
+            '<textarea class="form-textarea live-edit-field" data-key="' + f.key + '" data-selector="' + f.selector + '" data-testid="field-' + f.key + '">' + val + '</textarea>' +
+            '<div class="field-meta" data-meta-for="' + f.key + '" style="display:flex;justify-content:flex-end;font-size:11px;color:#64748b;margin-top:2px"><span class="char-count">' + (val || '').length + ' chars</span></div>' +
+          '</div>';
+        } else if (f.type === 'richtext') {
+          var rtHtml = val || '';
+          var rtlAttr = f.rtl ? ' dir="rtl"' : '';
+          var rtlStyle = f.rtl ? 'text-align:right;font-family:\'Noto Sans Arabic\',Arial,sans-serif;' : '';
+          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + makeTranslateBtnLocal(f.key) +
+              ' <button type="button" class="clean-field-btn" data-clean-key="' + f.key + '" title="Strip Word/MSO garbage" style="margin-left:6px;font-size:11px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:4px;padding:2px 8px;cursor:pointer">Clean</button>' +
+            '</label>' +
+            '<div class="rte-mini-toolbar" data-rte-target="rte-' + f.key + '" style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;background:#f1f5f9;border:1px solid #e2e8f0;border-bottom:none;border-radius:6px 6px 0 0;padding:4px">' +
+              '<button type="button" class="rte-mini-btn" data-cmd="bold" title="Bold" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer;font-weight:700;min-width:28px">B</button>' +
+              '<button type="button" class="rte-mini-btn" data-cmd="italic" title="Italic" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer;font-style:italic;min-width:28px">I</button>' +
+              '<button type="button" class="rte-mini-btn" data-cmd="underline" title="Underline" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer;text-decoration:underline;min-width:28px">U</button>' +
+              '<button type="button" class="rte-mini-btn" data-cmd="insertUnorderedList" title="Bulleted list" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer">&bull; List</button>' +
+              '<button type="button" class="rte-mini-btn" data-cmd="insertOrderedList" title="Numbered list" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer">1. List</button>' +
+              '<button type="button" class="rte-mini-btn" data-cmd="removeFormat" title="Clear formatting" style="background:#fff;border:1px solid #cbd5e1;border-radius:4px;padding:3px 8px;cursor:pointer">Clear</button>' +
+              '<span style="margin-left:auto;font-size:11px;color:#64748b;padding:0 6px">Tip: Ctrl+Shift+V pastes as plain text</span>' +
+            '</div>' +
+            '<div class="rte-editor rte-mini-editor live-edit-richtext" id="rte-' + f.key + '"' + rtlAttr + ' contenteditable="true" data-key="' + f.key + '" data-selector="' + f.selector + '" data-testid="field-' + f.key + '" style="min-height:120px;border:1px solid #e2e8f0;border-radius:0 0 6px 6px;padding:10px 12px;background:#fff;font-size:14px;line-height:1.6;outline:none;' + rtlStyle + '">' + rtHtml + '</div>' +
+            '<div class="field-meta" data-meta-for="' + f.key + '" style="display:flex;justify-content:flex-end;font-size:11px;color:#64748b;margin-top:2px"><span class="char-count">' + (rtHtml || '').replace(/<[^>]+>/g, '').length + ' chars</span></div>' +
+          '</div>';
+        } else {
+          var rtlAttrIn = f.rtl ? ' dir="rtl"' : '';
+          var rtlStyleIn = f.rtl ? ' style="text-align:right;font-family:\'Noto Sans Arabic\',Arial,sans-serif"' : '';
+          fieldsHtml += '<div class="form-group"><label class="form-label">' + f.label + makeTranslateBtnLocal(f.key) +
+              ' <button type="button" class="clean-field-btn" data-clean-key="' + f.key + '" title="Strip Word/MSO garbage" style="margin-left:6px;font-size:11px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:4px;padding:2px 8px;cursor:pointer">Clean</button>' +
+            '</label>' +
+            '<input class="form-input live-edit-field"' + rtlAttrIn + rtlStyleIn + ' data-key="' + f.key + '" data-selector="' + f.selector + '" value="' + val.replace(/"/g, '&quot;') + '" data-testid="field-' + f.key + '" />' +
+            '<div class="field-meta" data-meta-for="' + f.key + '" style="display:flex;justify-content:flex-end;font-size:11px;color:#64748b;margin-top:2px"><span class="char-count">' + (val || '').length + ' chars</span></div>' +
+          '</div>';
+        }
+      });
+    } else {
+      fieldsHtml = '<div class="empty-state" style="padding:20px"><div class="empty-state-title">Select a section</div><div>Choose a section to edit its content</div></div>';
+    }
+    return fieldsHtml;
+  }
+
+  // Switch to a different section without destroying the editor layout or
+  // reloading the preview iframe. Only the fields panel and section title
+  // are updated in-place — no layout shift, no iframe flicker.
+  function switchSectionInPlace(newSection) {
+    var isDetail = (newSection === 'project-detail' || newSection === 'service-detail');
+    if (isDetail) {
+      if (!state.detailSlug) {
+        state.detailSlug = newSection === 'project-detail' ? 'seaport-infrastructure' : 'marine-coastal-construction';
+      }
+    } else {
+      state.detailSlug = null;
+    }
+    state.editingSection = newSection;
+    state.editedContent = {};
+    state._serverLoaded = state._serverLoaded || {};
+    delete state._serverLoaded[newSection];
+
+    // Update fields panel in-place
+    var fieldsBody = document.getElementById('editorFieldsBody');
+    if (fieldsBody) {
+      fieldsBody.innerHTML = buildSectionFieldsHtml(newSection, state.detailSlug);
+      // Re-initialize Quill on any new richtext fields
+      if (typeof bindContentEditorExtras === 'function') bindContentEditorExtras();
+    }
+    // Update card title
+    var cardTitle = document.querySelector('.editor-fields .card-title');
+    if (cardTitle) {
+      var secs = pageSections[state.editingPage || '/'] || pageSections['/'];
+      var found = secs && secs.find(function(s) { return s.id === newSection; });
+      cardTitle.textContent = found ? found.name : 'Editor';
+    }
+    // Re-bind detail slug selector if present
+    var slugSel = document.getElementById('detailSlugSelector');
+    if (slugSel && !slugSel._bound) {
+      slugSel._bound = true;
+      slugSel.addEventListener('change', function() {
+        state.detailSlug = this.value;
+        state.editedContent = {};
+        switchSectionInPlace(state.editingSection);
+      });
+    }
+    // Wire upload/remove buttons on the new fields
+    document.querySelectorAll('#editorFieldsBody .upload-drop-area').forEach(function(area) {
+      if (area._bound) return; area._bound = true;
+      area.addEventListener('click', function() { var i = this.querySelector('.upload-file-input'); if (i) i.click(); });
+      area.addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('drag-over'); });
+      area.addEventListener('dragleave', function() { this.classList.remove('drag-over'); });
+      area.addEventListener('drop', function(e) {
+        e.preventDefault(); this.classList.remove('drag-over');
+        var files = e.dataTransfer.files;
+        if (files.length > 0) uploadFile(files[0], this.getAttribute('data-key'), this.getAttribute('data-selector'), this.getAttribute('data-attr'));
+      });
+    });
+    document.querySelectorAll('#editorFieldsBody .upload-file-input').forEach(function(input) {
+      if (input._bound) return; input._bound = true;
+      input.addEventListener('change', function() {
+        if (this.files && this.files.length > 0) uploadFile(this.files[0], this.getAttribute('data-key'), this.getAttribute('data-selector'), this.getAttribute('data-attr'));
+      });
+    });
+    document.querySelectorAll('#editorFieldsBody .upload-remove-btn').forEach(function(btn) {
+      if (btn._bound) return; btn._bound = true;
+      btn.addEventListener('click', function() {
+        state.editedContent[this.getAttribute('data-key')] = '';
+        switchSectionInPlace(state.editingSection);
+        showToast('Media removed', 'success');
+      });
+    });
+    // Load saved content from DB into the new fields
+    loadSavedSectionContent(newSection);
+    scrollPreviewToSection(newSection);
+    if (window.cahitPresenceTick) window.cahitPresenceTick();
+  }
+
   function bindEditorActions() {
     document.querySelectorAll('.section-item').forEach(function(el) {
+      if (el._bound) return;
+      el._bound = true;
       el.addEventListener('click', function() {
         document.querySelectorAll('.section-item').forEach(function(s) { s.classList.remove('active'); });
         this.classList.add('active');
-        state.editingSection = this.getAttribute('data-section');
-        state.editedContent = {};
-        var isDetail = (state.editingSection === 'project-detail' || state.editingSection === 'service-detail');
-        if (isDetail) {
-          if (!state.detailSlug) {
-            state.detailSlug = state.editingSection === 'project-detail' ? 'seaport-infrastructure' : 'marine-coastal-construction';
-          }
-        } else {
-          state.detailSlug = null;
-        }
-        renderPage('content');
-        bindEditorActions();
-        scrollPreviewToSection(state.editingSection);
-        if (window.cahitPresenceTick) window.cahitPresenceTick();
+        // Surgical in-place update — does NOT rebuild iframe or full editor layout
+        switchSectionInPlace(this.getAttribute('data-section'));
       });
     });
 
@@ -1819,25 +2001,11 @@
     }
 
     var detailSlugSel = document.getElementById('detailSlugSelector');
-    if (detailSlugSel) {
+    if (detailSlugSel && !detailSlugSel._bound) {
+      detailSlugSel._bound = true;
       detailSlugSel.addEventListener('change', function() {
         state.detailSlug = this.value;
-        state.editedContent = {};
-        var saveKey = state.editingSection + '-' + state.detailSlug;
-        fetch('/admin/api/site-content/' + saveKey, { headers: authHeaders() })
-          .then(function(r) { return r.json(); })
-          .then(function(result) {
-            if (result.success && result.data) {
-              Object.keys(result.data).forEach(function(k) {
-                state.editedContent[k] = result.data[k];
-              });
-            }
-            renderPage('content');
-            bindEditorActions();
-          }).catch(function() {
-            renderPage('content');
-            bindEditorActions();
-          });
+        switchSectionInPlace(state.editingSection);
       });
     }
 
@@ -1918,7 +2086,8 @@
     }
 
     var iframe = document.getElementById('previewFrame');
-    if (iframe) {
+    if (iframe && !iframe._loadBound) {
+      iframe._loadBound = true;
       iframe.addEventListener('load', function() {
         populateFieldsFromPreview();
         highlightPreviewSection(state.editingSection);
@@ -1961,11 +2130,11 @@
     });
 
     document.querySelectorAll('.upload-remove-btn').forEach(function(btn) {
+      if (btn._bound) return; btn._bound = true;
       btn.addEventListener('click', function() {
         var key = this.getAttribute('data-key');
         state.editedContent[key] = '';
-        renderPage('content');
-        bindEditorActions();
+        switchSectionInPlace(state.editingSection);
         showToast('Media removed', 'success');
       });
     });
@@ -2196,7 +2365,7 @@
                       showToast('Revision restored — reloading editor', 'success');
                       document.body.removeChild(modal);
                       state.editedContent = {};
-                      renderPage('content'); bindEditorActions();
+                      switchSectionInPlace(state.editingSection);
                     } else { showToast('Restore failed', 'error'); }
                   });
               });
@@ -2244,8 +2413,8 @@
       if (data.success) {
         state.editedContent[key] = data.url;
         updatePreviewAttr(selector, attr, data.url);
-        renderPage('content');
-        bindEditorActions();
+        var fb = document.getElementById('editorFieldsBody');
+        if (fb) { fb.innerHTML = buildSectionFieldsHtml(state.editingSection, state.detailSlug); if (typeof bindContentEditorExtras === 'function') bindContentEditorExtras(); }
         showToast('Uploaded: ' + data.name, 'success');
       } else {
         showToast(data.message || 'Upload failed', 'error');

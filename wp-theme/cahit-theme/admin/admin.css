@@ -1,4 +1,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+/* Always show scrollbar gutter so layout never shifts when content
+   overflows the viewport (the classic 17px scrollbar-appears jump). */
+html{overflow-y:scroll}
 :root{
   --bg:#f8fafc;--sidebar:#0f172a;--sidebar-hover:#1e293b;--sidebar-active:#0ea5e9;
   --card:#fff;--border:#e2e8f0;--text:#0f172a;--text-muted:#64748b;

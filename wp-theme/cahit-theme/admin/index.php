@@ -128,6 +128,21 @@ if (defined('ABSPATH')) {
       </header>
 
       <div class="admin-content" id="mainContent">
+        <!-- Skeleton shown for the ~50ms before admin.js renders the real dashboard.
+             Prevents the blank-white flash and keeps the scrollbar gutter stable. -->
+        <div id="initSkeleton" style="pointer-events:none">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-bottom:24px">
+            <div style="height:100px;background:#e2e8f0;border-radius:8px;animation:skelPulse 1.2s ease-in-out infinite"></div>
+            <div style="height:100px;background:#e2e8f0;border-radius:8px;animation:skelPulse 1.2s ease-in-out infinite .1s"></div>
+            <div style="height:100px;background:#e2e8f0;border-radius:8px;animation:skelPulse 1.2s ease-in-out infinite .2s"></div>
+            <div style="height:100px;background:#e2e8f0;border-radius:8px;animation:skelPulse 1.2s ease-in-out infinite .3s"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px">
+            <div style="height:260px;background:#e2e8f0;border-radius:8px;animation:skelPulse 1.2s ease-in-out infinite .1s"></div>
+            <div style="height:260px;background:#e2e8f0;border-radius:8px;animation:skelPulse 1.2s ease-in-out infinite .2s"></div>
+          </div>
+        </div>
+        <style>@keyframes skelPulse{0%,100%{opacity:1}50%{opacity:.45}}</style>
       </div>
     </main>
   </div>

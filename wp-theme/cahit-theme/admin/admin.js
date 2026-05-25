@@ -116,13 +116,15 @@
         var stamp = String(d.passwordChangedAt || '0');
         if (dismissed === stamp) return;
         if (d.passwordRotationDue) {
+          if (document.getElementById('pwdRotationBar')) return;
           var bar = document.createElement('div');
           bar.id = 'pwdRotationBar';
-          bar.style.cssText = 'position:sticky;top:0;z-index:200;background:#fef3c7;border-bottom:1px solid #fde68a;color:#92400e;padding:8px 16px;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600';
-          bar.innerHTML = '<span>Your admin password is ' + (d.passwordAgeDays || '90+') + ' days old. Rotate it from Settings &rarr; Account Security.</span>' +
-            '<button id="dismissPwdBar" style="background:transparent;border:1px solid #92400e;color:#92400e;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:12px">Remind me later</button>';
-          var main = document.querySelector('.main-content') || document.body;
-          main.insertBefore(bar, main.firstChild);
+          // position:fixed keeps the bar out of the normal document flow so it
+          // never causes a layout shift when it appears after login.
+          bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#fef3c7;border-top:1px solid #fde68a;color:#92400e;padding:8px 16px;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600;box-shadow:0 -2px 8px rgba(0,0,0,.08)';
+          bar.innerHTML = '<span>Your admin password is ' + (d.passwordAgeDays || '90+') + ' days old. Rotate it in Settings &rarr; Account Security.</span>' +
+            '<button id="dismissPwdBar" style="background:transparent;border:1px solid #92400e;color:#92400e;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:12px;white-space:nowrap;margin-left:12px">Remind me later</button>';
+          document.body.appendChild(bar);
           document.getElementById('dismissPwdBar').addEventListener('click', function() {
             localStorage.setItem('cahit_pwd_banner_dismissed_v', stamp);
             bar.remove();
